@@ -2,6 +2,8 @@
 alter table public.staff_events add column if not exists owner_staff_id uuid references public.profiles(user_id);
 alter table public.staff_events add column if not exists owner_cskh_name text;
 alter table public.staff_events add column if not exists owner_cbld_name text;
+alter table public.assignments add column if not exists owner_staff_id text;
+alter table public.staff_events add column if not exists owner_staff_key text;
 
 create or replace function public.set_staff_event_owner()
 returns trigger
@@ -11,11 +13,12 @@ set search_path=public
 as $$
 declare a record;
 begin
-  select cskh_user_id, cskh_name, cbld_name into a
+  select owner_staff_id, cskh_user_id, cskh_name, cbld_name into a
   from public.assignments
   where project_id = new.project_id and shop_id = new.shop_id;
   if not found then raise exception 'SHOP_NOT_ASSIGNED'; end if;
   new.owner_staff_id := a.cskh_user_id;
+  new.owner_staff_key := a.owner_staff_id;
   new.owner_cskh_name := a.cskh_name;
   new.owner_cbld_name := a.cbld_name;
   return new;
@@ -55,3 +58,4 @@ create policy "shared workspace unc read" on storage.objects for select using(bu
 
 drop policy if exists "cskh unc upload" on storage.objects;
 create policy "shared workspace unc upload" on storage.objects for insert with check(bucket_id='unc' and public.my_role() is not null);
+
