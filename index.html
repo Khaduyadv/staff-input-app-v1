@@ -7,4 +7,5 @@
 <h3>Kế hoạch thu</h3><input id="pa" type="number" placeholder="Số tiền VND"><input id="pd" type="date"><textarea id="pn" placeholder="Ghi chú"></textarea><button onclick="plan()">Lưu kế hoạch</button><button class="danger" onclick="cancelPlan()">Hủy kế hoạch</button>
 <h3>Tín hiệu thanh toán</h3><select id="st"><option>Khách báo đã chuyển</option><option>Có UNC/chứng từ</option><option>Xác nhận khác</option></select><input id="sa" type="number" placeholder="Số tiền VND"><input id="sd" type="date"><input id="unc" type="file" accept="image/*,.pdf"><textarea id="sn" placeholder="Ghi chú"></textarea><button onclick="signal()">Lưu tín hiệu</button><h3>Lịch sử</h3><div id="hist"></div></dialog>
 <dialog id="info"><button class="x" onclick="info.close()">×</button><h2>Thông tin dữ liệu</h2><p>Candidate/Pilot — chưa thay Staff Input Excel production.</p><p><b>Nguyên tắc:</b> Chính thức = MD/SAP; Tín hiệu = sự kiện Staff; Kế hoạch = dự kiến. Có UNC không đồng nghĩa đã thu.</p></dialog>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js"></script><script src="app.js"></script></body></html>
+<script src="supabase.min.js"></script><script src="config.js"></script><script src="app.js"></script></body></html>
+
