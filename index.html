@@ -12,6 +12,7 @@
 <body>
 <header><b>Staff Input <small>V1 Candidate · Pilot</small></b><button class="info-button" type="button" onclick="info.showModal()">ⓘ</button></header>
 <main>
+  <div id="bootMessage" class="message">Đang khởi tạo phiên dùng chung…</div>
   <section id="login" hidden>
     <h1>Không khởi tạo được phiên dùng chung</h1>
     <p>Hãy tải lại App hoặc liên hệ quản trị Pilot.</p>
@@ -79,7 +80,7 @@ const localState = shop => JSON.parse(localStorage.getItem(eventKey(shop)) || '{
 const localSave = (shop, state) => localStorage.setItem(eventKey(shop), JSON.stringify(state));
 const latestOf = (events, types) => [...events].reverse().find(e => types.includes(e.event_type || e.type));
 const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
-function setMessage(text, isError = false) { for (const id of ['message', 'loginMessage']) { const node = document.getElementById(id); if (node) { node.textContent = text; node.className = isError ? 'message error' : 'message'; } } }
+function setMessage(text, isError = false) { for (const id of ['message', 'loginMessage', 'bootMessage']) { const node = document.getElementById(id); if (node) { node.textContent = text; node.className = isError ? 'message error' : 'message'; } } }
 function normalizeShop(row) { return { ...row, project_id: row.project_id || cfg.PROJECT_ID || 'PILOT_TEST', shop_id: row.shop_id || row.shop, owner_staff_id: row.owner_staff_id || '', cskh_user_id: row.cskh_user_id || '', cskh_name: row.cskh_name || row.cskh || '', cbld_name: row.cbld_name || row.cbld || '', ps_kpi: Number(row.ps_kpi ?? row.ps ?? 0), ps_collected: Number(row.ps_collected ?? row.col ?? 0), official_kpi: Number(row.official_kpi ?? row.ps_kpi ?? row.ps ?? 0), official_collected: Number(row.official_collected ?? row.ps_collected ?? row.col ?? 0), __events: row.__events || [] }; }
 function ownerKey(row) { return row.owner_staff_id || row.cskh_user_id || `name:${row.cskh_name}`; }
 function buildStaffOptions() { const map = new Map(); assignments.forEach(a => { const key = ownerKey(a); if (!map.has(key)) map.set(key, { id: key, name: a.cskh_name || key, shopCount: 0 }); map.get(key).shopCount += 1; }); staffOptions = [...map.values()].sort((a, b) => a.name.localeCompare(b.name, 'vi')); if (!staffOptions.some(s => s.id === selectedStaffId)) selectedStaffId = localStorage.getItem('staffv1:last_selected_staff') || staffOptions[0]?.id || ''; }
@@ -87,7 +88,7 @@ async function loadOnlineData() { const [{ data: a, error: ae }, { data: d, erro
 function loadOfflineData() { assignments = demoAssignments; shops = assignments.map(a => normalizeShop({ ...a, ...(demoDebt[a.shop_id] || {}) })); buildStaffOptions(); }
 async function loadProfile(user) { if (!online) return { user_id: user?.id || 'demo', email: user?.email || 'demo', role: 'SHARED_STAFF', display_name: 'Nhân viên dùng chung', active: true }; if (user?.is_anonymous) { const { data, error } = await supabaseClient.rpc('ensure_workspace_session'); if (error) throw error; return { ...(data || {}), user_id: user.id, role: 'SHARED_STAFF', display_name: 'Nhân viên dùng chung', active: true }; } const { data, error } = await supabaseClient.from('profiles').select('user_id,email,role,display_name,active').eq('user_id', user.id).maybeSingle(); if (error) throw error; if (!data || data.active === false) throw new Error('AUTH_PROFILE_REQUIRED'); return data; }
 function renderAccount() { const node = document.getElementById('account'); if (!node || !currentProfile) return; node.innerHTML = `<b>${esc(currentProfile.display_name || currentProfile.email || 'Staff')}</b><span>${esc(currentProfile.role || '')} · ${esc(currentProfile.email || '')}</span>`; const adminButton = document.getElementById('adminAccessButton'); if (adminButton) adminButton.hidden = currentProfile.role !== 'ADMIN'; }
-async function enterApp(user) { try { currentProfile = await loadProfile(user); currentUser = user; document.getElementById('login').hidden = true; document.getElementById('app').hidden = false; renderAccount(); if (online) await loadOnlineData(); else loadOfflineData(); setMessage(online ? 'Đã kết nối Shared Staff Workspace. Công nợ chỉ đọc.' : 'Bản Candidate offline: dữ liệu demo lưu trên thiết bị.'); renderWorkspace(); } catch (error) { currentUser = null; currentProfile = null; if (online) await supabaseClient.auth.signOut({ scope: 'local' }).catch(() => {}); document.getElementById('login').hidden = false; document.getElementById('app').hidden = true; setMessage('Tài khoản chưa được cấp quyền vào Pilot Staff Workspace.', true); } }
+async function enterApp(user) { try { currentProfile = await loadProfile(user); currentUser = user; document.getElementById('login').hidden = true; document.getElementById('bootMessage').hidden = true; document.getElementById('app').hidden = false; renderAccount(); if (online) await loadOnlineData(); else loadOfflineData(); setMessage(online ? 'Đã kết nối Shared Staff Workspace. Công nợ chỉ đọc.' : 'Bản Candidate offline: dữ liệu demo lưu trên thiết bị.'); renderWorkspace(); } catch (error) { currentUser = null; currentProfile = null; if (online) await supabaseClient.auth.signOut({ scope: 'local' }).catch(() => {}); document.getElementById('login').hidden = true; document.getElementById('app').hidden = true; document.getElementById('bootMessage').hidden = false; setMessage(`Không khởi tạo được phiên dùng chung: ${error.message || error}`, true); } }
 function shopEvents(shop) { return online ? (shop.__events || []) : (localState(shop).events || []); }
 function currentPlan(events) { const plan = latestOf(events, ['PLAN_CHANGED', 'PLAN_CREATED']); const cancelled = latestOf(events, ['PLAN_CANCELLED']); return plan && (!cancelled || new Date(cancelled.event_time || cancelled.at) < new Date(plan.event_time || plan.at)) ? plan : null; }
 function matchesFilter(shop) { const debt = Math.max(0, shop.ps_kpi - shop.ps_collected); const events = shopEvents(shop); const plan = currentPlan(events); const signal = latestOf(events, ['PAYMENT_REPORTED']); const date = plan?.expected_date || plan?.date || ''; if (filter === 'debt') return debt > 0; if (filter === 'noplan') return !plan; if (filter === 'today') return date === localDate(); if (filter === 'overdue') return Boolean(date && date < localDate()); if (filter === 'signal') return Boolean(signal); return true; }
@@ -110,6 +111,7 @@ window.go = go; window.plan = plan; window.cancelPlan = cancelPlan; window.signa
 </script>
 </body>
 </html>
+
 
 
 
