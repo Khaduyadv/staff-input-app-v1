@@ -44,7 +44,14 @@
   </section>
 </main>
 <dialog id="shop"><button class="x" type="button" onclick="closeShop()">×</button><h2 id="title"></h2><div id="debt"></div>
-  <h3>KẾ HOẠCH THU</h3><input id="pa" type="number" inputmode="decimal" placeholder="Số tiền"><input id="pd" type="date"><textarea id="pn" placeholder="Ghi chú"></textarea><button type="button" class="primary-action" onclick="plan()">Lưu kế hoạch</button><button type="button" class="danger" onclick="cancelPlan()">Hủy kế hoạch</button>
+  <h3>KẾ HOẠCH THU</h3>
+  <div class="money-input-wrap"><input id="pa" type="text" inputmode="numeric" autocomplete="off" placeholder="Số tiền"><span class="money-unit">VNĐ</span></div>
+  <input id="pd" type="date"><textarea id="pn" placeholder="Ghi chú"></textarea>
+  <div id="planEntryPreview" class="plan-preview" aria-live="polite"></div>
+  <button id="savePlanButton" type="button" class="primary-action" onclick="plan()">Lưu kế hoạch</button>
+  <div id="planSaveStatus" class="message save-status" aria-live="polite"></div>
+  <div id="currentPlanPanel" class="current-plan-panel" aria-live="polite"></div>
+  <button type="button" class="danger" onclick="cancelPlan()">Hủy kế hoạch</button>
   <h3>TÍN HIỆU THANH TOÁN</h3><select id="st"><option>Khách báo đã chuyển</option><option>Có UNC/chứng từ</option><option>Xác nhận khác</option></select><input id="sa" type="number" inputmode="decimal" placeholder="Số tiền"><input id="sd" type="date"><input id="unc" type="file" accept="image/*,.pdf"><textarea id="sn" placeholder="Ghi chú"></textarea><button type="button" class="primary-action" onclick="signal()">Lưu tín hiệu</button><h3>LỊCH SỬ</h3><div id="hist"></div>
 </dialog>
 <dialog id="adminDialog"><button class="x" type="button" onclick="closeAdmin()">×</button><h2>Danh sách nhân sự</h2><p class="muted">Phân công và Chủ Shop lấy từ Assignment; người nhập hộ không đổi Chủ Shop.</p><div class="table-wrap"><table><thead><tr><th>Tên</th><th>Vai trò</th><th>Email</th><th>Số Shop</th><th>Trạng thái</th></tr></thead><tbody id="adminList"></tbody></table></div></dialog>
