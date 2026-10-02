@@ -124,6 +124,8 @@ end;
 $$;
 grant execute on function public.workspace_register_evidence(uuid,text,text,text,text,text,bigint) to authenticated;
 
+grant select on public.assignments, public.shop_debt_snapshot, public.staff_events, public.evidence_files to authenticated;
+
 -- Direct table writes are denied; only validated RPCs can append events/evidence.
 drop policy if exists "shared workspace event insert" on public.staff_events;
 drop policy if exists "cskh event insert" on public.staff_events;
