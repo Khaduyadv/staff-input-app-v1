@@ -8,7 +8,7 @@
   <title>Quản trị thu nợ</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="app.css">
+  <link rel="stylesheet" href="app.css?v=ce2faeb">
 </head>
 <body>
 <header><b class="brand">QUẢN TRỊ THU NỢ</b><button class="info-button" type="button" onclick="info.showModal()" aria-label="Thông tin ứng dụng">ⓘ</button></header>
@@ -56,5 +56,5 @@
 </dialog>
 <dialog id="adminDialog"><button class="x" type="button" onclick="closeAdmin()">×</button><h2>Danh sách nhân sự</h2><p class="muted">Phân công và Chủ Shop lấy từ Assignment; người nhập hộ không đổi Chủ Shop.</p><div class="table-wrap"><table><thead><tr><th>Tên</th><th>Vai trò</th><th>Email</th><th>Số Shop</th><th>Trạng thái</th></tr></thead><tbody id="adminList"></tbody></table></div></dialog>
 <dialog id="info"><button class="x" type="button" onclick="closeInfo()">×</button><h2>Thông tin ứng dụng</h2><p><b>Trạng thái:</b> Real data workspace · chỉ đọc công nợ</p><p><b>Project:</b> OCEAN_CITY</p><p><b>Phiên bản:</b> Value Release · 2026-10-02</p><p><b>Thời điểm dữ liệu:</b> MD_Update và Assignment snapshot đã nạp gần nhất</p><p><b>Nguồn MD:</b> Master Shared\MD_Update.xlsx</p><p><b>Nguồn Assignment:</b> Master Shared\2026_09_28_SHOP_STAFF_ASSIGNMENT.xlsx</p><p><b>Nguyên tắc:</b> Công nợ chính thức = MD/SAP; tín hiệu = sự kiện nhân viên; kế hoạch = dự kiến. Có UNC không đồng nghĩa đã thu.</p><details><summary>Thông tin kiểm soát</summary><p>Phạm vi dữ liệu khóa server-side theo OCEAN_CITY. Sự kiện append-only. UNC lưu private. Attribution lấy từ Assignment. Người nhập trong Shared Workspace hiện chưa được xác thực danh tính.</p></details></dialog>
-<script src="supabase.min.js"></script><script src="config.js"></script><script src="app.js"></script>
+<script src="supabase.min.js"></script><script src="config.js"></script><script src="app.js?v=ce2faeb"></script>
 </body></html>
