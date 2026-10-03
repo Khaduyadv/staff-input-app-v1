@@ -29,7 +29,7 @@ function cbldOptions() { return [...new Set(shops.map(s => s.cbld_name).filter(B
 function visibleStaffOptions() { return staffOptions.filter(s => !selectedCbldId || s.cbld === selectedCbldId); }
 function renderLanding() { const cbld = document.getElementById('cbldSelect'); const staff = document.getElementById('staffSelect'); if (!cbld || !staff) return; cbld.innerHTML = cbldOptions().map(name => `<option value="${esc(name)}">${esc(name)}</option>`).join(''); cbld.value = selectedCbldId; const options = visibleStaffOptions(); if (!options.some(s => s.id === selectedStaffId)) selectedStaffId = options[0]?.id || ''; staff.innerHTML = options.map(s => `<option value="${esc(s.id)}">${esc(s.name)} (${s.shopCount} Shop)</option>`).join(''); staff.value = selectedStaffId; const owned = shops.filter(s => ownerKey(s) === selectedStaffId); const debt = owned.reduce((sum, s) => sum + Math.max(0, s.ps_kpi - s.ps_collected), 0); const noPlan = owned.filter(s => !currentPlan(shopEvents(s))).length; document.getElementById('landingSummary').innerHTML = `<div><b>${owned.length}</b><small>Shop</small></div><div><b>${fmtCompact(debt)}</b><small>Còn phải thu</small></div><div><b>${noPlan}</b><small>Chưa kế hoạch</small></div>`; }
 async function fetchAll(build) { const rows = []; const pageSize = 1000; for (let offset = 0; offset <= 10000; offset += pageSize) { const { data, error } = await build(offset, pageSize); if (error) throw error; rows.push(...(data || [])); if (!data || data.length < pageSize) break; } return rows; }
-async function loadOnlineData() { const [a, d, e] = await Promise.all([fetchAll((offset, size) => supabaseClient.from('assignments').select('project_id,shop_id,owner_staff_id,cskh_user_id,cbld_user_id,cskh_name,cbld_name').eq('project_id', ACTIVE_PROJECT).order('shop_id', { ascending: true }).range(offset, offset + size - 1)), fetchAll((offset, size) => supabaseClient.from('shop_debt_snapshot').select('project_id,shop_id,as_of,ps_kpi,ps_collected,official_kpi,official_collected').eq('project_id', ACTIVE_PROJECT).order('shop_id', { ascending: true }).order('as_of', { ascending: false }).range(offset, offset + size - 1)), fetchAll((offset, size) => supabaseClient.from('staff_events').select('project_id,shop_id,event_type,event_time,amount,expected_date,note').eq('project_id', ACTIVE_PROJECT).order('event_time', { ascending: true }).range(offset, offset + size - 1))]); assignments = (a || []).filter(row => row.project_id === ACTIVE_PROJECT); const latest = new Map(); (d || []).forEach(row => { if (row.project_id !== ACTIVE_PROJECT) return; const key = `${row.project_id}::${row.shop_id}`; if (!latest.has(key)) latest.set(key, row); }); const events = new Map(); (e || []).forEach(row => { if (row.project_id !== ACTIVE_PROJECT) return; const key = `${row.project_id}::${row.shop_id}`; if (!events.has(key)) events.set(key, []); events.get(key).push(row); }); shops = assignments.filter(row => latest.has(`${row.project_id}::${row.shop_id}`)).map(row => normalizeShop({ ...row, ...(latest.get(`${row.project_id}::${row.shop_id}`) || {}), __events: events.get(`${row.project_id}::${row.shop_id}`) || [] })); buildStaffOptions(); }
+async function loadOnlineData() { throw new Error('Governed Current V1 reader must be loaded.'); }
 function loadOfflineData() { assignments = demoAssignments; shops = assignments.map(a => normalizeShop({ ...a, ...(demoDebt[a.shop_id] || {}) })); buildStaffOptions(); }
 async function loadProfile(user) { if (!online) return { user_id: user?.id || 'demo', email: user?.email || 'demo', role: 'SHARED_STAFF', display_name: 'Nhân viên dùng chung', active: true }; if (user?.is_anonymous) { const { data, error } = await supabaseClient.rpc('ensure_workspace_session'); if (error) throw error; return { ...(data || {}), user_id: user.id, role: 'SHARED_STAFF', display_name: 'Nhân viên dùng chung', active: true }; } const { data, error } = await supabaseClient.from('profiles').select('user_id,email,role,display_name,active').eq('user_id', user.id).maybeSingle(); if (error) throw error; if (!data || data.active === false) throw new Error('AUTH_PROFILE_REQUIRED'); return data; }
 function renderAccount() { const node = document.getElementById('account'); if (!node || !currentProfile) return; node.innerHTML = `<b>${esc(currentProfile.display_name || currentProfile.email || 'Staff')}</b><span>${esc(currentProfile.role || '')} · ${esc(currentProfile.email || '')}</span>`; const adminButton = document.getElementById('adminAccessButton'); if (adminButton) adminButton.hidden = currentProfile.role !== 'ADMIN'; }
@@ -59,4 +59,180 @@ async function loadAdminAccessList() { if (!online || currentProfile?.role !== '
 async function go() { const email = document.getElementById('email').value.trim(); if (!email) return setMessage('Nhập email công việc để nhận mã/link đăng nhập.', true); if (!online) return enterApp(); const redirect = `${window.location.origin}${window.location.pathname}`; const { error } = await supabaseClient.auth.signInWithOtp({ email, options: { emailRedirectTo: redirect } }); if (error) return setMessage(`Không gửi được mã/link đăng nhập: ${error.message}`, true); setMessage('Đã gửi mã/link đăng nhập. Mở email mới nhất rồi quay lại App.'); }
 function init() { selectedCbldId = localStorage.getItem('staffv1:last_selected_cbld') || ''; document.getElementById('cbldSelect')?.addEventListener('change', event => { selectedCbldId = event.target.value; const first = visibleStaffOptions()[0]; if (first) selectedStaffId = first.id; renderLanding(); }); document.getElementById('staffSelect')?.addEventListener('change', event => { selectedStaffId = event.target.value; const found = staffOptions.find(s => s.id === selectedStaffId); if (found?.cbld) selectedCbldId = found.cbld; renderLanding(); }); document.getElementById('enterWorkspace')?.addEventListener('click', enterWorkspace); document.getElementById('shopSearch')?.addEventListener('input', renderWorkspace); document.getElementById('shopSelect')?.addEventListener('change', event => { if (event.target.value) openShop(event.target.value); }); ['pa', 'sa'].forEach(id => document.getElementById(id)?.addEventListener('input', event => { event.target.value = formatMoneyEditing(event.target.value); if (id === 'pa') renderPlanEntryPreview(); })); ['pd', 'pn'].forEach(id => document.getElementById(id)?.addEventListener('input', renderPlanEntryPreview)); document.querySelectorAll('[data-filter]').forEach(button => button.addEventListener('click', () => { filter = button.dataset.filter; renderWorkspace(); })); if (!online) return enterApp(); (async () => { const { data: existing, error: sessionError } = await supabaseClient.auth.getSession(); if (sessionError) return setMessage(`Không đọc được phiên: ${sessionError.message}`, true); if (existing.session) return enterApp(existing.session.user); const { error: signInError } = await supabaseClient.auth.signInAnonymously(); if (signInError) return setMessage(`Không khởi tạo được phiên: ${signInError.message}`, true); const { data: currentSession, error: currentSessionError } = await supabaseClient.auth.getSession(); if (currentSessionError || !currentSession.session) return setMessage('ANONYMOUS_SESSION_NOT_READY', true); await enterApp(currentSession.session.user); })(); }
 window.go = go; window.plan = plan; window.cancelPlan = cancelPlan; window.signal = signal; window.logout = logout; window.enterWorkspace = enterWorkspace; window.changeStaff = changeStaff; window.loadAdminAccessList = loadAdminAccessList; window.closeShop = () => document.getElementById('shop').close(); window.closeInfo = () => document.getElementById('info').close(); window.closeAdmin = () => document.getElementById('adminDialog').close(); window.addEventListener('DOMContentLoaded', init);
+
+// Primary CURRENT is read only through the governed manifest/current RPCs.
+// A missing pointer or any lineage mismatch is a hard stop: there is no
+// MAX(as_of) or snapshot-table fallback.
+async function loadOnlineData() {
+  if (!online) throw new Error('GOVERNED_CURRENT_UNAVAILABLE: Không có kết nối dữ liệu chính thức.');
+  const cutoff = new Date().toISOString();
+  const { data: manifest, error: manifestError } = await supabaseClient.rpc('staff_manifest_v1', {
+    p_project_id: ACTIVE_PROJECT,
+    p_cutoff_at: cutoff
+  });
+  if (manifestError) {
+    const detail = `${manifestError.code || ''} ${manifestError.message || ''}`;
+    if (detail.includes('GOVERNED_CURRENT_POINTER_MISSING')) {
+      throw new Error('GOVERNED_CURRENT_POINTER_MISSING: Công nợ chính thức đang tạm thời chưa sẵn sàng. Vui lòng thử lại sau khi đồng bộ dữ liệu được phê duyệt.');
+    }
+    throw manifestError;
+  }
+  if (!manifest || manifest.project_id !== ACTIVE_PROJECT || manifest.reconciliation_status !== 'PASS' ||
+      !manifest.current_source_projection_sha || !Number.isInteger(Number(manifest.current_row_count))) {
+    throw new Error('GOVERNED_CURRENT_MANIFEST_INVALID');
+  }
+
+  const currentRows = [];
+  const pageSize = 1000;
+  for (let offset = 0; offset < Number(manifest.current_row_count); offset += pageSize) {
+    const { data, error } = await supabaseClient.rpc('staff_current_v1', {
+      p_project_id: ACTIVE_PROJECT, p_cutoff_at: cutoff, p_limit: pageSize, p_offset: offset
+    });
+    if (error) throw error;
+    currentRows.push(...(data || []));
+    if (!data || data.length < pageSize) break;
+  }
+  if (currentRows.length !== Number(manifest.current_row_count)) throw new Error('GOVERNED_CURRENT_ROW_COUNT_MISMATCH');
+  const expectedProjection = String(manifest.current_source_projection_sha).toLowerCase();
+  const expectedAsOf = String(manifest.current_source_as_of || '').slice(0, 10);
+  if (currentRows.some(row => row.project_id !== ACTIVE_PROJECT ||
+      String(row.source_hash || '').toLowerCase() !== expectedProjection ||
+      String(row.as_of || '').slice(0, 10) !== expectedAsOf || !row.shop_id ||
+      row.official_outstanding == null || row.ps_outstanding == null)) {
+    throw new Error('GOVERNED_CURRENT_LINEAGE_MISMATCH');
+  }
+
+  const [assignmentRows, eventRows] = await Promise.all([
+    fetchAll((offset, size) => supabaseClient.from('assignments')
+      .select('project_id,shop_id,owner_staff_id,cskh_user_id,cbld_user_id,cskh_name,cbld_name')
+      .eq('project_id', ACTIVE_PROJECT).order('shop_id', { ascending: true })
+      .range(offset, offset + size - 1)),
+    fetchAll((offset, size) => supabaseClient.from('staff_events')
+      .select('project_id,shop_id,event_type,event_time,amount,expected_date,note,supersedes_event_id,signal_type,payload')
+      .eq('project_id', ACTIVE_PROJECT).order('event_time', { ascending: true })
+      .range(offset, offset + size - 1))
+  ]);
+  assignments = assignmentRows.filter(row => row.project_id === ACTIVE_PROJECT);
+  const assignmentByShop = new Map(assignments.map(row => [`${row.project_id}::${row.shop_id}`, row]));
+  const eventsByShop = new Map();
+  eventRows.filter(row => row.project_id === ACTIVE_PROJECT).forEach(row => {
+    const key = `${row.project_id}::${row.shop_id}`;
+    if (!eventsByShop.has(key)) eventsByShop.set(key, []);
+    eventsByShop.get(key).push(row);
+  });
+  if (currentRows.some(row => !assignmentByShop.has(`${row.project_id}::${row.shop_id}`))) {
+    throw new Error('GOVERNED_CURRENT_ASSIGNMENT_MISSING');
+  }
+  shops = currentRows.map(row => {
+    const key = `${row.project_id}::${row.shop_id}`;
+    return normalizeShop({ ...assignmentByShop.get(key), ...row, __events: eventsByShop.get(key) || [] });
+  });
+  window.STAFF_APP_GOVERNED_MANIFEST = manifest;
+  buildStaffOptions();
+}
+
+function normalizeShop(row) {
+  return {
+    ...row, project_id: row.project_id || ACTIVE_PROJECT, shop_id: row.shop_id || row.shop,
+    owner_staff_id: row.owner_staff_id || '', cskh_user_id: row.cskh_user_id || '',
+    cskh_name: row.cskh_name || row.cskh || '', cbld_name: row.cbld_name || row.cbld || '',
+    ps_kpi: Number(row.ps_kpi ?? 0), ps_collected: Number(row.ps_collected ?? 0),
+    ps_outstanding: Math.max(0, Number(row.ps_outstanding ?? 0)),
+    official_kpi: Number(row.official_kpi ?? 0), official_collected: Number(row.official_collected ?? 0),
+    official_outstanding: Math.max(0, Number(row.official_outstanding ?? 0)), __events: row.__events || []
+  };
+}
+
+function planMetrics(shop, planValue = currentPlan(shopEvents(shop))) {
+  const debt = Math.max(0, Number(shop.official_outstanding) || 0);
+  const amount = Math.max(0, Number(planValue?.amount) || 0);
+  return { amount, unplanned: Math.max(debt - amount, 0), coverage: debt > 0 ? amount / debt : null };
+}
+
+function renderLanding() {
+  const cbld = document.getElementById('cbldSelect');
+  const staff = document.getElementById('staffSelect');
+  if (!cbld || !staff) return;
+  cbld.innerHTML = cbldOptions().map(name => `<option value="${esc(name)}">${esc(name)}</option>`).join('');
+  cbld.value = selectedCbldId;
+  const options = visibleStaffOptions();
+  if (!options.some(s => s.id === selectedStaffId)) selectedStaffId = options[0]?.id || '';
+  staff.innerHTML = options.map(s => `<option value="${esc(s.id)}">${esc(s.name)} (${s.shopCount} Shop)</option>`).join('');
+  staff.value = selectedStaffId;
+  const owned = shops.filter(s => ownerKey(s) === selectedStaffId);
+  const debt = owned.reduce((sum, s) => sum + Math.max(0, Number(s.official_outstanding) || 0), 0);
+  const noPlan = owned.filter(s => !currentPlan(shopEvents(s))).length;
+  document.getElementById('landingSummary').innerHTML = `<div><b>${owned.length}</b><small>Shop</small></div><div><b>${fmtCompact(debt)}</b><small>Tổng nợ còn phải thu</small></div><div><b>${noPlan}</b><small>Chưa kế hoạch</small></div>`;
+}
+
+function matchesFilter(shop) {
+  const debt = Math.max(0, Number(shop.official_outstanding) || 0);
+  const events = shopEvents(shop), planValue = currentPlan(events);
+  const date = planValue?.expected_date || planValue?.date || '';
+  if (filter === 'debt') return debt > 0;
+  if (filter === 'noplan') return !planValue;
+  if (filter === 'today') return date === localDate();
+  if (filter === 'overdue') return Boolean(date && date < localDate());
+  if (filter === 'signal') return Boolean(latestOf(events, ['PAYMENT_REPORTED']));
+  return true;
+}
+
+function renderWorkspace() {
+  renderLanding();
+  const workspace = document.getElementById('workspace'), landing = document.getElementById('landing');
+  if (workspace) workspace.hidden = !workspaceEntered;
+  if (landing) landing.hidden = workspaceEntered;
+  if (!workspaceEntered) return;
+  const list = document.getElementById('list');
+  if (!list) return;
+  const visible = selectedShops();
+  const debtTotal = visible.reduce((sum, shop) => sum + (Number(shop.official_outstanding) || 0), 0);
+  const noPlan = visible.filter(shop => !currentPlan(shopEvents(shop))).length;
+  const signalCount = visible.filter(shop => latestOf(shopEvents(shop), ['PAYMENT_REPORTED'])).length;
+  const overdue = visible.filter(shop => { const p = currentPlan(shopEvents(shop)); const date = p?.expected_date || p?.date; return date && date < localDate(); }).length;
+  document.getElementById('workspaceMeta').textContent = `${esc(selectedStaffId ? (staffOptions.find(s => s.id === selectedStaffId)?.name || '') : '')} · ${esc(selectedCbldId)}`;
+  document.getElementById('workspaceSummary').textContent = `${visible.length} Shop · Tổng nợ còn phải thu ${fmtCompact(debtTotal)} · Chưa kế hoạch ${noPlan} · Có tín hiệu ${signalCount} · Quá hạn ${overdue}`;
+  const shopSelect = document.getElementById('shopSelect');
+  if (shopSelect) shopSelect.innerHTML = '<option value="">Chọn Shop</option>' + visible.map(s => `<option value="${esc(s.shop_id)}">${esc(s.shop_id)} — ${esc(s.cskh_name)}</option>`).join('');
+  list.innerHTML = '';
+  visible.forEach(shop => {
+    const events = shopEvents(shop), planValue = currentPlan(events), signalValue = latestOf(events, ['PAYMENT_REPORTED']);
+    const metrics = planMetrics(shop, planValue), card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `<b>${esc(shop.shop_id)}</b><div class="muted">${esc(shop.cskh_name)} · ${esc(shop.cbld_name)}</div><p>Tổng nợ còn phải thu: <b>${fmtCompact(shop.official_outstanding)}</b></p><p class="muted">Nợ PS còn lại: ${fmtCompact(shop.ps_outstanding)}</p><p>Kế hoạch hiện tại: <b>${fmtCompact(metrics.amount)}</b><br>Còn chưa có kế hoạch: <b>${fmtCompact(metrics.unplanned)}</b><br>Tỷ lệ phủ kế hoạch: <b>${metrics.coverage == null ? '—' : `${(metrics.coverage * 100).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%`}</b></p><span class="badge">${planValue ? 'Có kế hoạch' : 'Chưa có kế hoạch'}</span>${signalValue ? '<span class="badge">Có tín hiệu</span>' : ''}<button type="button">Mở Shop</button>`;
+    card.querySelector('button').addEventListener('click', () => openShop(shop.shop_id));
+    list.appendChild(card);
+  });
+}
+
+function renderCurrentPlanPanel(planValue = currentPlan(currentEvents)) {
+  const node = document.getElementById('currentPlanPanel');
+  if (!node) return;
+  node.hidden = false;
+  const metrics = planMetrics(current || { official_outstanding: 0 }, planValue);
+  const ratio = metrics.coverage == null ? '—' : `${(metrics.coverage * 100).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%`;
+  if (!planValue) {
+    node.innerHTML = `<b>Kế hoạch hiện tại</b><p class="muted">Chưa có kế hoạch hiện tại.</p><p>Còn chưa có kế hoạch: <b>${fmtVnd(metrics.unplanned)}</b></p><p>Tỷ lệ phủ kế hoạch: <b>${ratio}</b></p>`;
+    return;
+  }
+  const savedAt = planValue.event_time || planValue.at;
+  node.innerHTML = `<b>Kế hoạch hiện tại</b><p class="current-plan-amount">${esc(fmtVnd(metrics.amount))}</p>${planValue.expected_date || planValue.date ? `<p>Dự kiến thu: <b>${esc(formatDateVi(planValue.expected_date || planValue.date))}</b></p>` : ''}<p>Còn chưa có kế hoạch: <b>${fmtVnd(metrics.unplanned)}</b></p><p>Tỷ lệ phủ kế hoạch: <b>${ratio}</b></p><p class="muted">✓ Đã lưu${savedAt ? ` · ${esc(new Date(savedAt).toLocaleString('vi-VN'))}` : ''}</p>`;
+}
+
+async function openShop(id) {
+  current = shops.find(shop => shop.shop_id === id && ownerKey(shop) === selectedStaffId);
+  if (!current) return;
+  try { currentEvents = await eventsFor(current); }
+  catch (error) { return setMessage(`Không đọc được lịch sử: ${error.message}`, true); }
+  const planValue = currentPlan(currentEvents);
+  document.getElementById('title').textContent = current.shop_id;
+  document.getElementById('debt').innerHTML = `Shop: <b>${esc(current.shop_id)}</b><br>CSKH phụ trách: <b>${esc(current.cskh_name)}</b><br>CBLĐ: <b>${esc(current.cbld_name)}</b><br>Tổng nợ còn phải thu: <b>${fmt(current.official_outstanding)}</b><br>Nợ PS còn lại: <b>${fmt(current.ps_outstanding)}</b>`;
+  document.getElementById('pa').value = formatMoneyEditing(planValue?.amount || '');
+  document.getElementById('pd').value = planValue?.expected_date || planValue?.date || '';
+  document.getElementById('pn').value = planValue?.note || '';
+  setPlanSaveStatus(''); renderPlanEntryPreview(); renderCurrentPlanPanel(planValue); history();
+  document.getElementById('shop').showModal();
+}
+
+window.STAFF_APP_READ_CONTRACT = 'GOVERNED_CURRENT_POINTER_V1';
 
