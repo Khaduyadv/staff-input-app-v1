@@ -1,238 +1,186 @@
-const cfg = window.STAFF_APP_CONFIG || {};
-const ACTIVE_PROJECT = String(cfg.PROJECT_ID || 'OCEAN_CITY');
-const online = Boolean(window.supabase && cfg.SUPABASE_URL && cfg.SUPABASE_ANON_KEY && !String(cfg.SUPABASE_URL).includes('YOUR_') && !String(cfg.SUPABASE_ANON_KEY).includes('YOUR_'));
-const supabaseClient = online ? window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY, { auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: true, flowType: 'implicit' } }) : null;
-const demoAssignments = [
-  { project_id: 'PILOT_TEST', shop_id: 'SHOP_A1', cskh_user_id: 'pilot-a', cskh_name: 'Nguyễn A', cbld_name: 'CBLĐ Pilot' },
-  { project_id: 'PILOT_TEST', shop_id: 'SHOP_A2', cskh_user_id: 'pilot-a', cskh_name: 'Nguyễn A', cbld_name: 'CBLĐ Pilot' },
-  { project_id: 'PILOT_TEST', shop_id: 'SHOP_B1', cskh_user_id: 'pilot-b', cskh_name: 'Nguyễn B', cbld_name: 'CBLĐ Pilot' }
-];
-const demoDebt = { SHOP_A1: { ps_kpi: 50000000, ps_collected: 10000000 }, SHOP_A2: { ps_kpi: 80000000, ps_collected: 60000000 }, SHOP_B1: { ps_kpi: 90000000, ps_collected: 20000000 } };
-let assignments = [], shops = [], staffOptions = [], selectedStaffId = '', selectedCbldId = '', workspaceEntered = false, current = null, currentEvents = [], filter = 'all', currentUser = null, currentProfile = null;
-const fmt = value => new Intl.NumberFormat('vi-VN').format(Number(value) || 0) + ' ₫';
-const fmtVnd = value => new Intl.NumberFormat('vi-VN').format(Number(value) || 0) + ' VNĐ';
-function parseMoneyInput(value) { const digits = String(value ?? '').replace(/[^\d]/g, ''); return digits ? Number(digits) : 0; }
-function formatMoneyEditing(value) { const digits = String(value ?? '').replace(/[^\d]/g, ''); return digits ? new Intl.NumberFormat('vi-VN').format(Number(digits)) : ''; }
-function formatDateVi(value) { if (!value) return ''; const [year, month, day] = String(value).slice(0, 10).split('-'); return year && month && day ? `${day}/${month}/${year}` : String(value); }
-const fmtCompact = value => { const n = Number(value) || 0; if (Math.abs(n) >= 1e9) return `${(n / 1e9).toLocaleString('vi-VN', { maximumFractionDigits: 2 })} tỷ`; if (Math.abs(n) >= 1e6) return `${(n / 1e6).toLocaleString('vi-VN', { maximumFractionDigits: 1 })} tr`; return fmt(n); };
-const localDate = () => new Date().toISOString().slice(0, 10);
-const eventKey = shop => `staffv1:${shop.project_id}:${shop.shop_id}`;
-const localState = shop => JSON.parse(localStorage.getItem(eventKey(shop)) || '{"events":[]}');
-const localSave = (shop, state) => localStorage.setItem(eventKey(shop), JSON.stringify(state));
-const latestOf = (events, types) => [...events].reverse().find(e => types.includes(e.event_type || e.type));
-const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
-function setMessage(text, isError = false) { for (const id of ['message', 'loginMessage', 'bootMessage']) { const node = document.getElementById(id); if (node) { node.textContent = text; node.className = isError ? 'message error' : 'message'; } } }
-function normalizeShop(row) { return { ...row, project_id: row.project_id || ACTIVE_PROJECT, shop_id: row.shop_id || row.shop, owner_staff_id: row.owner_staff_id || '', cskh_user_id: row.cskh_user_id || '', cskh_name: row.cskh_name || row.cskh || '', cbld_name: row.cbld_name || row.cbld || '', ps_kpi: Number(row.ps_kpi ?? row.ps ?? 0), ps_collected: Number(row.ps_collected ?? row.col ?? 0), official_kpi: Number(row.official_kpi ?? row.ps_kpi ?? row.ps ?? 0), official_collected: Number(row.official_collected ?? row.ps_collected ?? row.col ?? 0), __events: row.__events || [] }; }
-function ownerKey(row) { return row.owner_staff_id || row.cskh_user_id || `name:${row.cskh_name}`; }
-function buildStaffOptions() { const map = new Map(); shops.forEach(a => { const key = ownerKey(a); if (!map.has(key)) map.set(key, { id: key, name: a.cskh_name || key, cbld: a.cbld_name || '', shopCount: 0 }); map.get(key).shopCount += 1; }); staffOptions = [...map.values()].sort((a, b) => a.name.localeCompare(b.name, 'vi')); if (!staffOptions.some(s => s.id === selectedStaffId)) selectedStaffId = localStorage.getItem('staffv1:last_selected_staff') || staffOptions[0]?.id || ''; if (!selectedCbldId || ![...new Set(shops.map(s => s.cbld_name).filter(Boolean))].includes(selectedCbldId)) selectedCbldId = staffOptions.find(s => s.id === selectedStaffId)?.cbld || [...new Set(shops.map(s => s.cbld_name).filter(Boolean))][0] || ''; }
-function cbldOptions() { return [...new Set(shops.map(s => s.cbld_name).filter(Boolean))].filter(name => ['Chu Thị Hoài Phương', 'Trần Đăng Nam'].includes(name)).sort((a, b) => a.localeCompare(b, 'vi')); }
-function visibleStaffOptions() { return staffOptions.filter(s => !selectedCbldId || s.cbld === selectedCbldId); }
-function renderLanding() { const cbld = document.getElementById('cbldSelect'); const staff = document.getElementById('staffSelect'); if (!cbld || !staff) return; cbld.innerHTML = cbldOptions().map(name => `<option value="${esc(name)}">${esc(name)}</option>`).join(''); cbld.value = selectedCbldId; const options = visibleStaffOptions(); if (!options.some(s => s.id === selectedStaffId)) selectedStaffId = options[0]?.id || ''; staff.innerHTML = options.map(s => `<option value="${esc(s.id)}">${esc(s.name)} (${s.shopCount} Shop)</option>`).join(''); staff.value = selectedStaffId; const owned = shops.filter(s => ownerKey(s) === selectedStaffId); const debt = owned.reduce((sum, s) => sum + Math.max(0, s.ps_kpi - s.ps_collected), 0); const noPlan = owned.filter(s => !currentPlan(shopEvents(s))).length; document.getElementById('landingSummary').innerHTML = `<div><b>${owned.length}</b><small>Shop</small></div><div><b>${fmtCompact(debt)}</b><small>Còn phải thu</small></div><div><b>${noPlan}</b><small>Chưa kế hoạch</small></div>`; }
-async function fetchAll(build) { const rows = []; const pageSize = 1000; for (let offset = 0; offset <= 10000; offset += pageSize) { const { data, error } = await build(offset, pageSize); if (error) throw error; rows.push(...(data || [])); if (!data || data.length < pageSize) break; } return rows; }
-async function loadOnlineData() { throw new Error('Governed Current V1 reader must be loaded.'); }
-function loadOfflineData() { assignments = demoAssignments; shops = assignments.map(a => normalizeShop({ ...a, ...(demoDebt[a.shop_id] || {}) })); buildStaffOptions(); }
-async function loadProfile(user) { if (!online) return { user_id: user?.id || 'demo', email: user?.email || 'demo', role: 'SHARED_STAFF', display_name: 'Nhân viên dùng chung', active: true }; if (user?.is_anonymous) { const { data, error } = await supabaseClient.rpc('ensure_workspace_session'); if (error) throw error; return { ...(data || {}), user_id: user.id, role: 'SHARED_STAFF', display_name: 'Nhân viên dùng chung', active: true }; } const { data, error } = await supabaseClient.from('profiles').select('user_id,email,role,display_name,active').eq('user_id', user.id).maybeSingle(); if (error) throw error; if (!data || data.active === false) throw new Error('AUTH_PROFILE_REQUIRED'); return data; }
-function renderAccount() { const node = document.getElementById('account'); if (!node || !currentProfile) return; node.innerHTML = `<b>${esc(currentProfile.display_name || currentProfile.email || 'Staff')}</b><span>${esc(currentProfile.role || '')} · ${esc(currentProfile.email || '')}</span>`; const adminButton = document.getElementById('adminAccessButton'); if (adminButton) adminButton.hidden = currentProfile.role !== 'ADMIN'; }
-async function enterApp(user) { try { currentProfile = await loadProfile(user); currentUser = user; document.getElementById('login').hidden = true; document.getElementById('bootMessage').hidden = true; document.getElementById('app').hidden = false; renderAccount(); if (online) await loadOnlineData(); else loadOfflineData(); setMessage('Sẵn sàng nhập liệu.'); renderLanding(); renderWorkspace(); } catch (error) { currentUser = null; currentProfile = null; if (online) await supabaseClient.auth.signOut({ scope: 'local' }).catch(() => {}); document.getElementById('login').hidden = true; document.getElementById('app').hidden = true; document.getElementById('bootMessage').hidden = false; setMessage(`Không khởi tạo được phiên: ${error.message || error}`, true); } }
-function shopEvents(shop) { return online ? (shop.__events || []) : (localState(shop).events || []); }
-function currentPlan(events) { const plan = latestOf(events, ['PLAN_CHANGED', 'PLAN_CREATED']); const cancelled = latestOf(events, ['PLAN_CANCELLED']); return plan && (!cancelled || new Date(cancelled.event_time || cancelled.at) < new Date(plan.event_time || plan.at)) ? plan : null; }
-function renderPlanEntryPreview() { const node = document.getElementById('planEntryPreview'); if (!node) return; const amount = parseMoneyInput(document.getElementById('pa')?.value); const date = document.getElementById('pd')?.value || ''; const note = document.getElementById('pn')?.value.trim() || ''; if (!amount && !date && !note) { node.hidden = true; node.textContent = ''; return; } node.hidden = false; node.innerHTML = `<b>Đang nhập</b><br>${amount ? esc(fmtVnd(amount)) : 'Chưa nhập số tiền'}${date ? `<br>Dự kiến thu: ${esc(formatDateVi(date))}` : ''}${note ? `<br>Ghi chú: ${esc(note)}` : ''}`; }
-function renderCurrentPlanPanel(planValue = currentPlan(currentEvents)) { const node = document.getElementById('currentPlanPanel'); if (!node) return; node.hidden = false; if (!planValue) { node.innerHTML = '<b>Kế hoạch hiện tại</b><p class="muted">Chưa có kế hoạch hiện tại.</p>'; return; } const savedAt = planValue.event_time || planValue.at; node.innerHTML = `<b>Kế hoạch hiện tại</b><p class="current-plan-amount">${esc(fmtVnd(planValue.amount))}</p>${planValue.expected_date || planValue.date ? `<p>Dự kiến thu: <b>${esc(formatDateVi(planValue.expected_date || planValue.date))}</b></p>` : ''}<p class="muted">✓ Đã lưu${savedAt ? ` · ${esc(new Date(savedAt).toLocaleString('vi-VN'))}` : ''}</p>`; }
-function setPlanSaveStatus(text = '', isError = false) { const node = document.getElementById('planSaveStatus'); if (!node) return; node.textContent = text; node.className = isError ? 'message save-status error' : 'message save-status'; node.hidden = !text; }
-function matchesFilter(shop) { const debt = Math.max(0, shop.ps_kpi - shop.ps_collected); const events = shopEvents(shop); const plan = currentPlan(events); const signal = latestOf(events, ['PAYMENT_REPORTED']); const date = plan?.expected_date || plan?.date || ''; if (filter === 'debt') return debt > 0; if (filter === 'noplan') return !plan; if (filter === 'today') return date === localDate(); if (filter === 'overdue') return Boolean(date && date < localDate()); if (filter === 'signal') return Boolean(signal); return true; }
-function selectedShops() { const q = (document.getElementById('shopSearch')?.value || '').toLowerCase(); return shops.filter(s => ownerKey(s) === selectedStaffId && s.cbld_name === selectedCbldId && s.shop_id.toLowerCase().includes(q) && matchesFilter(s)); }
-function renderWorkspace() { renderLanding(); const workspace = document.getElementById('workspace'); const landing = document.getElementById('landing'); if (workspace) workspace.hidden = !workspaceEntered; if (landing) landing.hidden = workspaceEntered; if (!workspaceEntered) return; const list = document.getElementById('list'); if (!list) return; const visible = selectedShops(); const debtTotal = visible.reduce((sum, s) => sum + Math.max(0, s.ps_kpi - s.ps_collected), 0); const noPlan = visible.filter(s => !currentPlan(shopEvents(s))).length; const signalCount = visible.filter(s => latestOf(shopEvents(s), ['PAYMENT_REPORTED'])).length; const overdue = visible.filter(s => { const p = currentPlan(shopEvents(s)); const d = p?.expected_date || p?.date; return d && d < localDate(); }).length; document.getElementById('workspaceMeta').textContent = `${esc(selectedStaffId ? (staffOptions.find(s => s.id === selectedStaffId)?.name || '') : '')} · ${esc(selectedCbldId)}`; document.getElementById('workspaceSummary').textContent = `${visible.length} Shop · Còn phải thu ${fmtCompact(debtTotal)} · Chưa kế hoạch ${noPlan} · Có tín hiệu ${signalCount} · Quá hạn ${overdue}`; const shopSelect = document.getElementById('shopSelect'); if (shopSelect) shopSelect.innerHTML = '<option value="">Chọn Shop</option>' + visible.map(s => `<option value="${esc(s.shop_id)}">${esc(s.shop_id)} — ${esc(s.cskh_name)}</option>`).join(''); list.innerHTML = ''; visible.forEach(shop => { const events = shopEvents(shop); const plan = currentPlan(events); const signal = latestOf(events, ['PAYMENT_REPORTED']); const debt = Math.max(0, shop.ps_kpi - shop.ps_collected); const card = document.createElement('div'); card.className = 'card'; card.innerHTML = `<b>${esc(shop.shop_id)}</b><div class="muted">${esc(shop.cskh_name)} · ${esc(shop.cbld_name)}</div><p>Còn phải thu: <b>${fmtCompact(debt)}</b></p><span class="badge">${plan ? 'Có kế hoạch' : 'Chưa có kế hoạch'}</span>${signal ? '<span class="badge">Có tín hiệu</span>' : ''}<button type="button">Mở Shop</button>`; card.querySelector('button').addEventListener('click', () => openShop(shop.shop_id)); list.appendChild(card); }); }
-async function openShop(id) { current = shops.find(s => s.shop_id === id && ownerKey(s) === selectedStaffId); if (!current) return; try { currentEvents = await eventsFor(current); } catch (error) { return setMessage(`Không đọc được lịch sử: ${error.message}`, true); } const plan = currentPlan(currentEvents); document.getElementById('title').textContent = current.shop_id; document.getElementById('debt').innerHTML = `Shop: <b>${esc(current.shop_id)}</b><br>CSKH phụ trách: <b>${esc(current.cskh_name)}</b><br>CBLĐ: <b>${esc(current.cbld_name)}</b><br>Nợ PS: <b>${fmt(current.ps_kpi)}</b><br>Đã thu PS: <b>${fmt(current.ps_collected)}</b><br>Còn phải thu: <b>${fmt(current.ps_kpi - current.ps_collected)}</b>`; document.getElementById('pa').value = formatMoneyEditing(plan?.amount || ''); document.getElementById('pd').value = plan?.expected_date || plan?.date || ''; document.getElementById('pn').value = plan?.note || ''; setPlanSaveStatus(''); renderPlanEntryPreview(); renderCurrentPlanPanel(plan); history(); document.getElementById('shop').showModal(); }
-async function eventsFor(shop) { if (!online) return localState(shop).events || []; if (shop.project_id !== ACTIVE_PROJECT) throw new Error('PROJECT_SCOPE_VIOLATION'); const { data, error } = await supabaseClient.from('staff_events').select('*').eq('project_id', ACTIVE_PROJECT).eq('shop_id', shop.shop_id).order('event_time', { ascending: true }); if (error) throw error; return data || []; }
-async function appendEvent(payload, previous = null) { if (!current || current.project_id !== ACTIVE_PROJECT) throw new Error('PROJECT_SCOPE_VIOLATION'); if (!online) { const state = localState(current); state.events.push({ ...payload, owner_staff_id: current.owner_staff_id, type: payload.event_type, id: crypto.randomUUID(), at: new Date().toISOString(), by: currentProfile?.email || 'demo', before: previous || null }); localSave(current, state); currentEvents = state.events; return state.events[state.events.length - 1]; } const { data, error } = await supabaseClient.rpc('workspace_append_event', { p_project_id: ACTIVE_PROJECT, p_shop_id: current.shop_id, p_event_type: payload.event_type, p_amount: payload.amount ?? null, p_expected_date: payload.expected_date ?? null, p_signal_type: payload.signal_type ?? null, p_note: payload.note ?? null, p_supersedes_event_id: payload.supersedes_event_id ?? null, p_cancelled_reason: payload.cancelled_reason ?? null, p_payload: payload.payload || {} }); if (error) throw error; const row = Array.isArray(data) ? data[0] : data; if (!row) throw new Error('EVENT_NOT_CREATED'); currentEvents.push(row); return row; }
-async function plan() { const amount = parseMoneyInput(document.getElementById('pa').value); const date = document.getElementById('pd').value; if (!amount || !date) { setPlanSaveStatus('Chưa lưu được — vui lòng nhập đủ số tiền và ngày dự kiến thu.', true); return setMessage('Nhập đủ số tiền và ngày dự kiến thu.', true); } const old = currentPlan(currentEvents); const button = document.getElementById('savePlanButton'); if (button) { button.disabled = true; button.textContent = 'Đang lưu...'; } setPlanSaveStatus(''); try { const saved = await appendEvent({ event_type: old ? 'PLAN_CHANGED' : 'PLAN_CREATED', amount, expected_date: date, note: document.getElementById('pn').value, supersedes_event_id: old?.event_id || null }, old); setMessage('Đã lưu kế hoạch theo nhân viên phụ trách; lịch sử cũ vẫn được giữ.'); setPlanSaveStatus('✓ Đã lưu kế hoạch'); renderCurrentPlanPanel(currentPlan(currentEvents) || saved); history(); refreshCurrentShop(); } catch (error) { setPlanSaveStatus('Chưa lưu được — vui lòng thử lại', true); setMessage(`Không lưu được kế hoạch: ${error.message}`, true); } finally { if (button) { button.disabled = false; button.textContent = 'Lưu kế hoạch'; } } }
-async function cancelPlan() { const old = currentPlan(currentEvents); if (!old) return setMessage('Shop chưa có kế hoạch hiện tại.', true); const reason = document.getElementById('pn').value.trim() || 'Người dùng yêu cầu hủy'; try { await appendEvent({ event_type: 'PLAN_CANCELLED', cancelled_reason: reason, supersedes_event_id: old.event_id || null }, old); setMessage('Đã ghi event hủy; không xóa lịch sử.'); setPlanSaveStatus(''); renderCurrentPlanPanel(null); history(); refreshCurrentShop(); } catch (error) { setMessage(`Không hủy được kế hoạch: ${error.message}`, true); } }
-function setSignalSaveStatus(text = '', isError = false) { const node = document.getElementById('signalSaveStatus'); if (!node) return; node.textContent = text; node.className = isError ? 'message save-status error' : 'message save-status'; node.hidden = !text; }
-function clearSignalForm() { for (const id of ['sa', 'sd', 'sn']) { const node = document.getElementById(id); if (node) node.value = ''; } const file = document.getElementById('unc'); if (file) file.value = ''; }
-async function signal() { const amount = parseMoneyInput(document.getElementById('sa').value); const date = document.getElementById('sd').value; if (!amount || !date) { setSignalSaveStatus('Chưa lưu được — vui lòng nhập đủ số tiền và ngày.', true); return setMessage('Nhập đủ số tiền và ngày khách báo thanh toán.', true); } const file = document.getElementById('unc').files[0]; if (file && (file.size > 10 * 1024 * 1024 || !['application/pdf','image/jpeg','image/png'].includes(file.type))) { setSignalSaveStatus('Chưa lưu được — vui lòng thử lại', true); return setMessage('UNC phải là PDF/JPG/PNG và không quá 10 MB.', true); } const button = document.getElementById('saveSignalButton'); if (button) { button.disabled = true; button.textContent = 'Đang lưu...'; } setSignalSaveStatus(''); try { const event = await appendEvent({ event_type: 'PAYMENT_REPORTED', signal_type: document.getElementById('st').value, amount, expected_date: date, note: document.getElementById('sn').value, payload: {} }); if (online && file && event?.event_id) { const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_'); const path = `${current.project_id}/${current.shop_id}/${event.event_id}/${safeName}`; const { error: uploadError } = await supabaseClient.storage.from(cfg.EVIDENCE_BUCKET || 'unc').upload(path, file, { upsert: false, contentType: file.type }); if (uploadError) throw uploadError; const { error: metadataError } = await supabaseClient.rpc('workspace_register_evidence', { p_payment_event_id: event.event_id, p_project_id: current.project_id, p_shop_id: current.shop_id, p_storage_path: path, p_original_filename: file.name, p_mime_type: file.type, p_size_bytes: file.size }); if (metadataError) throw metadataError; await appendEvent({ event_type: 'EVIDENCE_UPLOADED', note: file.name, payload: { payment_event_id: event.event_id, storage_path: path } }); } setSignalSaveStatus(`✓ Đã ghi nhận tín hiệu: ${fmtVnd(amount)}`); setMessage('✓ Đã ghi nhận tín hiệu'); clearSignalForm(); history(); refreshCurrentShop(); } catch (error) { setSignalSaveStatus('Chưa lưu được — vui lòng thử lại', true); setMessage(`Không lưu được Tín hiệu/UNC: ${error.message}`, true); } finally { if (button) { button.disabled = false; button.textContent = 'Lưu tín hiệu'; } } }
-function refreshCurrentShop() { if (current) { const idx = shops.findIndex(s => s.shop_id === current.shop_id && s.project_id === current.project_id); if (idx >= 0 && !online) current.__events = currentEvents; } renderWorkspace(); }
-function history() { const node = document.getElementById('hist'); const events = [...currentEvents].reverse(); node.innerHTML = events.length ? events.map(event => `<div class="event"><b>${esc(event.event_type || event.type)}</b> · ${esc(new Date(event.event_time || event.at).toLocaleString('vi-VN'))}<br>${event.amount != null ? fmt(event.amount) : ''} ${esc(event.expected_date || event.date || '')} ${esc(event.signal_type || '')}<div class="muted">${esc(event.note || event.cancelled_reason || '')}</div></div>`).join('') : '<span class="muted">Chưa có lịch sử.</span>'; }
-async function logout() { if (online) await supabaseClient.auth.signOut({ scope: 'local' }); currentUser = null; currentProfile = null; shops = []; document.getElementById('app').hidden = true; document.getElementById('login').hidden = false; setMessage('Đã đăng xuất.'); }
-function enterWorkspace() { if (!selectedCbldId || !selectedStaffId) return setMessage('Chọn CBLĐ và nhân viên phụ trách.', true); workspaceEntered = true; localStorage.setItem('staffv1:last_selected_staff', selectedStaffId); localStorage.setItem('staffv1:last_selected_cbld', selectedCbldId); renderWorkspace(); }
-function changeStaff() { workspaceEntered = false; current = null; currentEvents = []; document.getElementById('shopSearch').value = ''; renderWorkspace(); }
-async function loadAdminAccessList() { if (!online || currentProfile?.role !== 'ADMIN') return; const [profilesResult, a] = await Promise.all([supabaseClient.from('profiles').select('user_id,email,role,display_name,active'), fetchAll((offset, size) => supabaseClient.from('assignments').select('cskh_user_id,cbld_user_id').eq('project_id', ACTIVE_PROJECT).range(offset, offset + size - 1))]); if (profilesResult.error) throw profilesResult.error; const counts = {}; (a || []).forEach(row => [row.cskh_user_id, row.cbld_user_id].filter(Boolean).forEach(id => { counts[id] = (counts[id] || 0) + 1; })); document.getElementById('adminList').innerHTML = (profilesResult.data || []).map(p => `<tr><td>${esc(p.display_name || '')}</td><td>${esc(p.role)}</td><td>${esc(p.email)}</td><td>${counts[p.user_id] || 0}</td><td>${p.active ? 'Đang hoạt động' : 'Tạm khóa'}</td></tr>`).join('') || '<tr><td colspan="5">Chưa có nhân sự trong Project hiện hành.</td></tr>'; document.getElementById('adminDialog').showModal(); }
-async function go() { const email = document.getElementById('email').value.trim(); if (!email) return setMessage('Nhập email công việc để nhận mã/link đăng nhập.', true); if (!online) return enterApp(); const redirect = `${window.location.origin}${window.location.pathname}`; const { error } = await supabaseClient.auth.signInWithOtp({ email, options: { emailRedirectTo: redirect } }); if (error) return setMessage(`Không gửi được mã/link đăng nhập: ${error.message}`, true); setMessage('Đã gửi mã/link đăng nhập. Mở email mới nhất rồi quay lại App.'); }
-function init() { selectedCbldId = localStorage.getItem('staffv1:last_selected_cbld') || ''; document.getElementById('cbldSelect')?.addEventListener('change', event => { selectedCbldId = event.target.value; const first = visibleStaffOptions()[0]; if (first) selectedStaffId = first.id; renderLanding(); }); document.getElementById('staffSelect')?.addEventListener('change', event => { selectedStaffId = event.target.value; const found = staffOptions.find(s => s.id === selectedStaffId); if (found?.cbld) selectedCbldId = found.cbld; renderLanding(); }); document.getElementById('enterWorkspace')?.addEventListener('click', enterWorkspace); document.getElementById('shopSearch')?.addEventListener('input', renderWorkspace); document.getElementById('shopSelect')?.addEventListener('change', event => { if (event.target.value) openShop(event.target.value); }); ['pa', 'sa'].forEach(id => document.getElementById(id)?.addEventListener('input', event => { event.target.value = formatMoneyEditing(event.target.value); if (id === 'pa') renderPlanEntryPreview(); })); ['pd', 'pn'].forEach(id => document.getElementById(id)?.addEventListener('input', renderPlanEntryPreview)); document.querySelectorAll('[data-filter]').forEach(button => button.addEventListener('click', () => { filter = button.dataset.filter; renderWorkspace(); })); if (!online) return enterApp(); (async () => { const { data: existing, error: sessionError } = await supabaseClient.auth.getSession(); if (sessionError) return setMessage(`Không đọc được phiên: ${sessionError.message}`, true); if (existing.session) return enterApp(existing.session.user); const { error: signInError } = await supabaseClient.auth.signInAnonymously(); if (signInError) return setMessage(`Không khởi tạo được phiên: ${signInError.message}`, true); const { data: currentSession, error: currentSessionError } = await supabaseClient.auth.getSession(); if (currentSessionError || !currentSession.session) return setMessage('ANONYMOUS_SESSION_NOT_READY', true); await enterApp(currentSession.session.user); })(); }
-window.go = go; window.plan = plan; window.cancelPlan = cancelPlan; window.signal = signal; window.logout = logout; window.enterWorkspace = enterWorkspace; window.changeStaff = changeStaff; window.loadAdminAccessList = loadAdminAccessList; window.closeShop = () => document.getElementById('shop').close(); window.closeInfo = () => document.getElementById('info').close(); window.closeAdmin = () => document.getElementById('adminDialog').close(); window.addEventListener('DOMContentLoaded', init);
+import { createAdapter } from './governed-read-adapter.js?v=20261004-governed-r1';
+import { buildStaffDirectory, normalizeStaffSearch } from './staff-entry-model.js?v=20261004-v23-final-r1';
+import { cents, money, displayCents, groupDigits, parseInput, formatInput, today, addDays, dateLabel, metrics, matchesQueue, compareItems, planKey, validateParts } from './workbench-model.js?v=20261004-v23-final-r1';
+const $ = s => document.querySelector(s);
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const state = { mode:'scoped', adapter:null, data:[], events:[], meta:{}, selectedContext:null, cbldDirectory:[], cbld:null, persona:null, view:'work', type:'ALL', query:'', plans:new Map(), staffFilter:null, manager:false, editing:null, nextIds:[], dirty:false, undo:null, queueScroll:0 };
+const labels = { work:'Cần xử lý', needs:'Chưa có kế hoạch', partial:'Chưa lập đủ kế hoạch', due:'Đến / quá ngày thu', covered:'Đã lập đủ kế hoạch', all:'Danh mục được phân công' };
+const statusLabels = { needs:'Chưa có kế hoạch', partial:'Chưa lập đủ', covered:'Đã lập đủ', zero:'Số còn phải thu bằng 0', unknown:'Chưa đối soát' };
+const key = e => planKey(state.meta.project_id, state.persona?.id, e.canonical_id);
+const parts = e => state.plans.get(key(e)) || [];
+const scope = () => state.data;
+const visible = () => scope().filter(e => (!state.staffFilter || e.staff_id === state.staffFilter) && (state.type === 'ALL' || e.presentation_type === state.type) && normalizeStaffSearch(e.name || e.canonical_id).includes(normalizeStaffSearch(state.query)) && matchesQueue(metrics(e,parts(e)),state.view)).sort((a,b) => compareItems(a,b,parts));
+const getEntity = id => scope().find(e => e.canonical_id === id);
 
-// Primary CURRENT is read only through the governed manifest/current RPCs.
-// A missing pointer or any lineage mismatch is a hard stop: there is no
-// MAX(as_of) or snapshot-table fallback.
-async function loadOnlineData() {
-  if (!online) throw new Error('GOVERNED_CURRENT_UNAVAILABLE: Không có kết nối dữ liệu chính thức.');
-  const cutoff = new Date().toISOString();
-  const { data: manifest, error: manifestError } = await supabaseClient.rpc('staff_manifest_v1', {
-    p_project_id: ACTIVE_PROJECT,
-    p_cutoff_at: cutoff
-  });
-  if (manifestError) {
-    const detail = `${manifestError.code || ''} ${manifestError.message || ''}`;
-    if (detail.includes('GOVERNED_CURRENT_POINTER_MISSING')) {
-      throw new Error('GOVERNED_CURRENT_POINTER_MISSING: Công nợ chính thức đang tạm thời chưa sẵn sàng. Vui lòng thử lại sau khi đồng bộ dữ liệu được phê duyệt.');
-    }
-    throw manifestError;
+const buildContextDirectory = contexts => {
+  const groups = new Map();
+  for (const context of contexts) {
+    let group = groups.get(context.cbld_name);
+    if (!group) { group = { id:context.cbld_name, name:context.cbld_name, staff:[] }; groups.set(context.cbld_name, group); }
+    group.staff.push({ id:`${context.cbld_name}::${context.owner_staff_id}`, name:context.cskh_name, relationship:'SERVER_SCOPE_CONTEXT', context });
   }
-  if (!manifest || manifest.project_id !== ACTIVE_PROJECT || manifest.reconciliation_status !== 'PASS' ||
-      !manifest.current_source_projection_sha || !Number.isInteger(Number(manifest.current_row_count))) {
-    throw new Error('GOVERNED_CURRENT_MANIFEST_INVALID');
+  return [...groups.values()];
+};
+const friendlyScopeError = err => {
+  if (err?.code === 'SCOPE_VIOLATION') return 'Phạm vi này không hợp lệ hoặc không còn được phân công. Hãy chọn lại.';
+  if (err?.code === 'AUTH_REQUIRED') return 'Chưa tạo được phiên làm việc. Hãy thử lại.';
+  if (err?.code === 'CONTRACT_CONFLICT') return 'Contract phạm vi chưa sẵn sàng cho lựa chọn này.';
+  return 'Chưa tải được phạm vi. Hãy thử lại.';
+};
+async function load() {
+  $('#cbldList').innerHTML = '<p role="status">Đang tải phạm vi phụ trách…</p>';
+  state.adapter=createAdapter();
+  try {
+    const contexts = await state.adapter.loadContextCatalog();
+    state.cbldDirectory = buildContextDirectory(contexts);
+    $('#governedNotice').textContent = 'Chọn CBLĐ và CSKH. Phạm vi sẽ được kiểm tra trên máy chủ trước khi mở công việc.';
+    resetEntry();
+  } catch {
+    $('#cbldList').innerHTML = '<div class="empty" role="alert"><h3>Chưa tải được danh sách</h3><p>Kiểm tra kết nối rồi thử lại. Chưa có dữ liệu để mở công việc.</p><button id="retry">Thử lại</button></div>';
+    $('#retry').onclick = load;
   }
-
-  const currentRows = [];
-  const pageSize = 1000;
-  for (let offset = 0; offset < Number(manifest.current_row_count); offset += pageSize) {
-    const { data, error } = await supabaseClient.rpc('staff_current_v1', {
-      p_project_id: ACTIVE_PROJECT, p_cutoff_at: cutoff, p_limit: pageSize, p_offset: offset
-    });
-    if (error) throw error;
-    currentRows.push(...(data || []));
-    if (!data || data.length < pageSize) break;
+}
+function resetEntry() {
+  state.data=[];state.events=[];state.meta={};state.selectedContext=null;state.cbld=null;state.persona=null;state.editing=null;state.nextIds=[];state.staffFilter=null;state.manager=false;
+  $('#entryError').textContent='';
+  $('#cbldStep').hidden=false;$('#cskhStep').hidden=true;$('#entryConfirm').hidden=true;
+  $('#cbldList').innerHTML=state.cbldDirectory.map(cbld=>`<button class="person-choice" data-cbld="${esc(cbld.id)}"><div><b>${esc(cbld.name)}</b><span>${cbld.staff.length} CSKH · Chọn để kiểm tra phạm vi</span></div><em aria-hidden="true">→</em></button>`).join('');
+  $('#staffList').innerHTML='';
+}
+function selectCbld(id) {
+  state.cbld=state.cbldDirectory.find(cbld=>cbld.id===id)||null;state.persona=null;
+  if(!state.cbld)return;
+  $('#entryError').textContent='';
+  $('#cbldStep').hidden=true;$('#cskhStep').hidden=false;$('#entryConfirm').hidden=true;
+  $('#selectedCbldText').textContent=`CBLĐ: ${state.cbld.name}`;
+  $('#staffList').innerHTML=state.cbld.staff.map(person=>`<button class="person-choice" data-person="${esc(person.id)}"><div><b>${esc(person.name)}</b><span>Chọn để kiểm tra phạm vi được phân công</span></div><em aria-hidden="true">→</em></button>`).join('');
+  $('#cskhTitle').setAttribute('tabindex','-1');$('#cskhTitle').focus();
+}
+async function selectCskh(id) {
+  state.persona=state.cbld?.staff.find(person=>person.id===id)||null;
+  if(!state.persona)return;
+  const context=state.persona.context;
+  $('#entryError').textContent='';$('#confirmCbld').textContent=state.cbld.name;$('#confirmCskh').textContent=state.persona.name;$('#confirmCount').textContent='Đang kiểm tra phạm vi…';
+  try {
+    const result=await state.adapter.loadScoped(context);
+    state.data=result.entities;state.events=result.events;state.meta=result.meta;state.selectedContext=context;
+    $('#cskhStep').hidden=true;$('#entryConfirm').hidden=false;
+    $('#confirmCount').textContent=`${state.data.length} gian hàng được phân công`;
+    $('#confirmTitle').setAttribute('tabindex','-1');$('#confirmTitle').focus();
+  } catch (err) {
+    state.data=[];state.events=[];state.meta={};state.selectedContext=null;
+    $('#entryError').textContent=friendlyScopeError(err);
   }
-  if (currentRows.length !== Number(manifest.current_row_count)) throw new Error('GOVERNED_CURRENT_ROW_COUNT_MISMATCH');
-  const expectedProjection = String(manifest.current_source_projection_sha).toLowerCase();
-  const expectedAsOf = String(manifest.current_source_as_of || '').slice(0, 10);
-  if (currentRows.some(row => row.project_id !== ACTIVE_PROJECT ||
-      String(row.source_hash || '').toLowerCase() !== expectedProjection ||
-      String(row.as_of || '').slice(0, 10) !== expectedAsOf || !row.shop_id ||
-      row.official_outstanding == null || row.ps_outstanding == null)) {
-    throw new Error('GOVERNED_CURRENT_LINEAGE_MISMATCH');
+}
+function enter() {
+  if (!state.cbld || !state.persona || !state.selectedContext || !state.data.length) return;
+  state.view='work';state.type='ALL';state.query='';state.staffFilter=null;state.manager=false;state.undo=null;
+  $('#search').value='';$('#type').value='ALL';$('#toast').hidden=true;$('#entry').hidden=true;$('#workspace').hidden=false;
+  render(); window.scrollTo(0,0); $('#personName').setAttribute('tabindex','-1');$('#personName').focus();
+}
+function render() {
+  const all = scope(); const rows = visible();
+  $('#personName').textContent=state.persona.name;
+  $('#scopeLabel').textContent='CSKH';$('#workspaceCbld').textContent=state.cbld.name;
+  $('#scopeCount').textContent=`${all.length} gian hàng được phân công`;
+  $('#asOf').textContent=dateLabel(state.meta.debt_as_of_values?.[0]);
+  $('#workTitle').textContent=state.manager ? 'Góc duyệt quản lý' : labels[state.view];
+  $('#actionCount').textContent=all.filter(e=>matchesQueue(metrics(e,parts(e)),'work')).length;
+  $('#actionCount').setAttribute('aria-label','Số gian hàng còn cần lập kế hoạch trong phiên');
+  $('#queueFilter').value=state.view;
+  for (const o of $('#queueFilter').options) o.textContent=`${labels[o.value]} (${all.filter(e=>matchesQueue(metrics(e,parts(e)),o.value)).length})`;
+  $('.toolbar').hidden=state.manager;$('.list-caption').hidden=state.manager;
+  $('#resultCount').textContent=`${rows.length} gian hàng${state.staffFilter ? ' · đang lọc cán bộ' : ''}`;
+  document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-current', (b.dataset.view === 'work' ? !['due','all'].includes(state.view) : b.dataset.view === state.view) && !state.manager ? 'page':'false'));
+  $('#queue').hidden=state.manager;$('#manager').hidden=!state.manager;
+  if (state.manager) { renderManager();return; }
+  const gapNotice = state.meta.entity_type_contract_gap ? '<div class="contract-note" role="status"><b>Đang chờ bổ sung loại gian hàng</b><span>Danh sách và số liệu đọc từ nguồn governed; bộ lọc SHOP / KHÁC chỉ hoạt động sau khi contract trả về loại nguồn.</span></div>' : '';
+  $('#queue').innerHTML=gapNotice + (rows.map(card).join('') || `<div class="empty"><span class="empty-symbol" aria-hidden="true">✓</span><h3>${state.view==='due' ? 'Không có gian hàng đến hoặc quá ngày thu.' : 'Không có gian hàng trong danh sách này.'}</h3><p>${state.view==='due' ? 'Theo các đợt thu đã lưu trong phiên này.' : 'Bạn có thể đổi bộ lọc hoặc xem công việc cần xử lý.'}</p><button data-reset>Xem công việc cần xử lý</button></div>`);
+}
+function card(e) {
+  const m=metrics(e,parts(e));
+  return `<article class="work-item" data-entity="${esc(e.canonical_id)}" data-owner="${esc(e.staff_id)}" data-cbld="${esc(e.assigned_cbld)}"><div class="item-top"><div class="identity"><h3>${esc(e.name || e.canonical_id)}</h3><p>${esc(e.staff)}</p></div><span class="badge ${e.presentation_type==='KHÁC'?'other':''}">${e.presentation_type}</span></div><div class="amount-block"><small>Còn phải thu</small><strong class="amount">${money(e.source_reported_remaining)}</strong><div class="subamount">Đã thu · ${money(e.collected_amount)}</div></div><div class="item-plan"><div class="plan-status"><strong>${statusLabels[m.status]}</strong>${m.percent>0?`<b>${m.percent.toLocaleString('vi-VN')}%</b>`:''}</div><span>Kế hoạch đã lưu · ${displayCents(m.planned)}</span>${m.nextDate?`<div>${m.due?'Đến / quá ngày thu':'Ngày thu gần nhất'} · ${dateLabel(m.nextDate)}</div>`:''}</div><div class="item-action"><span>${m.excess>0n?'Vượt số còn phải thu '+displayCents(m.excess):'Còn cần lập '+displayCents(m.remainder)}</span><button data-plan="${esc(e.canonical_id)}">${parts(e).length?'Cập nhật kế hoạch':'Lập kế hoạch'} →</button></div></article>`;
+}
+function changeView(view) {state.view=view;state.manager=false;render();window.scrollTo(0,0);}
+function openPlan(id, continuing=false) {
+  const e=getEntity(id);if(!e)return;
+  if(!continuing) { state.nextIds=visible().map(e=>e.canonical_id); state.queueScroll=window.scrollY; }
+  state.editing=e;state.dirty=false;
+  const saved=parts(e),m=metrics(e,saved);
+  $('#planTitle').textContent=e.name||e.canonical_id;$('#planType').textContent=e.presentation_type;$('#planStaff').textContent=`CSKH: ${e.staff} · CBLĐ: ${state.cbld.name}`;
+  $('#planReference').textContent=money(e.source_reported_remaining);$('#priorPlan').textContent=displayCents(m.planned);$('#priorRemaining').textContent=displayCents(m.remainder);
+  $('#existingNote').textContent=saved.length?`${saved.length} đợt đã lưu. Bạn có thể chỉnh sửa hoặc thêm đợt; các đợt cũ vẫn được giữ.`:'Nhập số tiền và ngày dự kiến cho từng đợt thu.';
+  $('#installments').innerHTML='';(saved.length?saved:[{amount:'',date:'',note:''}]).forEach(addPart);
+  $('#formError').textContent='';$('#discard').hidden=true;$('#planFeedback').textContent=continuing?'Đã lưu gian hàng trước. Tiếp tục với gian hàng này.':'';
+  preview();if(!$('#planner').open)$('#planner').showModal();$('.sheet-body').scrollTop=0;$('#planTitle').focus();
+}
+function addPart(p={amount:'',date:'',note:''}) {
+  const n=$('#installments').children.length+1;
+  const node=document.createElement('fieldset');node.className='installment';
+  node.innerHTML=`<legend>Đợt thu ${n}</legend><label for="amount${n}">Số tiền dự kiến thu</label><div class="money-wrap"><input id="amount${n}" name="amount" inputmode="numeric" autocomplete="off" value="${esc(groupDigits(p.amount))}" aria-describedby="formError"><span>đ</span></div><div class="date-grid"><label for="date${n}">Ngày dự kiến thu</label><div class="date-control"><span class="date-display" id="dateDisplay${n}" aria-hidden="true">${p.date?dateLabel(p.date):'DD/MM/YYYY'}</span><span class="date-icon" aria-hidden="true">▦</span><input class="date-native" id="date${n}" name="date" type="date" value="${esc(p.date)}" aria-describedby="dateDisplay${n} datePreview${n} formError"></div><span class="date-preview" id="datePreview${n}">${p.date?'':'Chưa chọn ngày'}</span></div><div class="date-shortcuts" aria-label="Chọn ngày nhanh"><button type="button" data-days="0">Hôm nay</button><button type="button" data-days="1">Ngày mai</button><button type="button" data-days="3">+3 ngày</button><button type="button" data-days="7">+7 ngày</button></div><label class="note-label" for="note${n}">Ghi chú <span class="muted">· không bắt buộc</span></label><textarea id="note${n}" name="note" rows="2" maxlength="500">${esc(p.note)}</textarea>`;
+  $('#installments').append(node);
+}
+function rawParts(){return [...document.querySelectorAll('.installment')].map(row=>({amount:row.querySelector('[name=amount]').value,date:row.querySelector('[name=date]').value,note:row.querySelector('[name=note]').value}));}
+function preview(){
+  const raw=rawParts();const valid=raw.every(p=>parseInput(p.amount)!==null);
+  if(!valid){$('#previewRemaining').textContent='Nhập số tiền để xem';$('#excessNote').textContent='';return;}
+  const m=metrics(state.editing,raw.map(p=>({...p,amount:parseInput(p.amount)})));
+  $('#previewRemaining').textContent=displayCents(m.remainder);
+  $('#excessNote').textContent=m.excess>0n?`Kế hoạch vượt số tham chiếu ${displayCents(m.excess)}. Hãy kiểm tra trước khi lưu.`:'';
+}
+function requestClose(){if(state.dirty){$('#discard').hidden=false;$('#discard').scrollIntoView({block:'nearest'});$('#keepEditing').focus();}else $('#planner').close();}
+async function save(event){
+  event.preventDefault();const raw=rawParts();let validated;
+  document.querySelectorAll('#planner input').forEach(i=>i.removeAttribute('aria-invalid'));
+  try {validated=validateParts(raw);}catch(err){$('#formError').textContent=err.message;const num=Number(err.message.match(/Đợt (\d+)/)?.[1]);const target=$(`#${err.message.includes('số tiền')?'amount':'date'}${num}`);target?.setAttribute('aria-invalid','true');target?.focus();return;}
+  const e=state.editing;const k=key(e);state.undo={key:k,previous:structuredClone(parts(e)),entity:e.canonical_id};
+  try { state.lastWrite=await state.adapter.appendPlan({context:state.selectedContext,shopId:e.canonical_id,installments:validated}); }
+  catch (err) { $('#formError').textContent=friendlyScopeError(err); return; }
+  state.plans.set(k,validated);state.dirty=false;$('#planner').close();render();
+  $('#toastText').textContent=`${state.lastWrite?.dry_run?'Đã lưu bản thử nghiệm':'Đã lưu'} ${validated.length} đợt thu · ${e.canonical_id}`;$('#toast').hidden=false;
+  if(event.submitter?.value==='next'){
+    const position=state.nextIds.indexOf(e.canonical_id);
+    const next=state.nextIds.slice(position+1).find(id=>{const item=getEntity(id);return item&&matchesQueue(metrics(item,parts(item)),state.view);});
+    if(next)openPlan(next,true);else{$('#toastText').textContent+=' · Đã đến cuối danh sách.';$('#queue').focus();}
   }
-
-  const [assignmentRows, eventRows] = await Promise.all([
-    fetchAll((offset, size) => supabaseClient.from('assignments')
-      .select('project_id,shop_id,owner_staff_id,cskh_user_id,cbld_user_id,cskh_name,cbld_name')
-      .eq('project_id', ACTIVE_PROJECT).order('shop_id', { ascending: true })
-      .range(offset, offset + size - 1)),
-    fetchAll((offset, size) => supabaseClient.from('staff_events')
-      .select('project_id,shop_id,event_type,event_time,amount,expected_date,note,supersedes_event_id,signal_type,payload')
-      .eq('project_id', ACTIVE_PROJECT).order('event_time', { ascending: true })
-      .range(offset, offset + size - 1))
-  ]);
-  assignments = assignmentRows.filter(row => row.project_id === ACTIVE_PROJECT);
-  const assignmentByShop = new Map(assignments.map(row => [`${row.project_id}::${row.shop_id}`, row]));
-  const eventsByShop = new Map();
-  eventRows.filter(row => row.project_id === ACTIVE_PROJECT).forEach(row => {
-    const key = `${row.project_id}::${row.shop_id}`;
-    if (!eventsByShop.has(key)) eventsByShop.set(key, []);
-    eventsByShop.get(key).push(row);
-  });
-  if (currentRows.some(row => !assignmentByShop.has(`${row.project_id}::${row.shop_id}`))) {
-    throw new Error('GOVERNED_CURRENT_ASSIGNMENT_MISSING');
-  }
-  shops = currentRows.map(row => {
-    const key = `${row.project_id}::${row.shop_id}`;
-    return normalizeShop({ ...assignmentByShop.get(key), ...row, __events: eventsByShop.get(key) || [] });
-  });
-  window.STAFF_APP_GOVERNED_MANIFEST = manifest;
-  buildStaffOptions();
 }
-
-function normalizeShop(row) {
-  return {
-    ...row, project_id: row.project_id || ACTIVE_PROJECT, shop_id: row.shop_id || row.shop,
-    owner_staff_id: row.owner_staff_id || '', cskh_user_id: row.cskh_user_id || '',
-    cskh_name: row.cskh_name || row.cskh || '', cbld_name: row.cbld_name || row.cbld || '',
-    ps_kpi: Number(row.ps_kpi ?? 0), ps_collected: Number(row.ps_collected ?? 0),
-    ps_outstanding: Math.max(0, Number(row.ps_outstanding ?? 0)),
-    official_kpi: Number(row.official_kpi ?? 0), official_collected: Number(row.official_collected ?? 0),
-    official_outstanding: Math.max(0, Number(row.official_outstanding ?? 0)), __events: row.__events || []
-  };
+function information(){
+  const all=scope();const sum=f=>all.reduce((s,e)=>s+cents(e[f]),0n);const planned=all.reduce((s,e)=>s+metrics(e,parts(e)).planned,0n);const rem=all.reduce((s,e)=>s+metrics(e,parts(e)).remainder,0n);
+  const meta=state.meta;
+  $('#infoBody').innerHTML=`<p class="muted">Số liệu cập nhật đến ${dateLabel(meta.debt_as_of_values?.[0])}. Kế hoạch bạn nhập chỉ có trong phiên này; tải lại trang sẽ xóa kế hoạch thử.</p><p><b>CBLĐ:</b> ${esc(state.cbld.name)}<br><b>CSKH:</b> ${esc(state.persona.name)}</p><div class="info-stats"><div><span>Còn phải thu tham chiếu · ${all.length} gian hàng</span><b>${displayCents(sum('source_reported_remaining'))}</b></div><div><span>Đã thu · hiển thị riêng</span><b>${displayCents(sum('collected_amount'))}</b></div><div><span>Kế hoạch thu đã lưu trong phiên</span><b>${displayCents(planned)}</b></div><div><span>Còn cần lập kế hoạch</span><b>${displayCents(rem)}</b></div></div><p>Đây là số liệu đọc theo phạm vi đã được máy chủ kiểm tra. Danh sách đến ngày thu chỉ dựa trên ngày kế hoạch bạn nhập.</p><details><summary>Thông tin số liệu</summary><p>Phạm vi ${esc(meta.project_id)} · ${Number(meta.current_row_count||all.length).toLocaleString('vi-VN')} gian hàng · cập nhật ${esc(dateLabel(meta.debt_as_of_values?.[0]))}.</p><p>Số còn phải thu tham chiếu lấy từ trường số dư được contract trả về; đã thu lấy từ trường đã thu cùng nguồn. Hai trường này chưa có xác nhận semantic production, nên không được gọi là tổng nợ chính thức.</p><p>Loại nguồn SHOP / KIOSK / KDQC chưa có trong contract đọc hiện tại. Không suy đoán loại từ mã gian hàng; bộ lọc SHOP / KHÁC sẽ hoạt động sau khi contract bổ sung trường này.</p><p>Kế hoạch cục bộ tính bằng số nguyên chính xác; bộ ghi sự kiện V1.1 chỉ được bật khi sandbox được cấu hình cho phép.</p></details><details><summary>Công cụ duyệt bản thử nghiệm</summary><p>Bộ chọn CBLĐ → CSKH là lựa chọn context vận hành trong sandbox, không phải đăng nhập hay danh tính đã xác minh. Context được máy chủ kiểm tra trước khi mở phạm vi.</p><button id="openManager">Góc duyệt quản lý · Thử nghiệm</button><p>Thử trạng thái giao diện (không thay dữ liệu):</p><button data-demo="loading">Đang tải</button> <button data-demo="error">Lỗi tải</button></details>`;
+  $('#information').showModal();
 }
-
-function planMetrics(shop, planValue = currentPlan(shopEvents(shop))) {
-  const debt = Math.max(0, Number(shop.official_outstanding) || 0);
-  const amount = Math.max(0, Number(planValue?.amount) || 0);
-  return { amount, unplanned: Math.max(debt - amount, 0), coverage: debt > 0 ? amount / debt : null };
+function renderManager(){
+  const rows=buildStaffDirectory(scope());
+  $('#manager').innerHTML=`<section class="manager-head"><small>GÓC DUYỆT · THỬ NGHIỆM</small><h2>Phân bổ công việc</h2><p>Phạm vi theo phân công tham chiếu; chưa xác nhận quyền quản lý. Kế hoạch chỉ tính trong phiên của cán bộ đang chọn.</p><p>Thứ tự theo tên, không đánh giá hiệu suất.</p><button data-back-work>Về công việc</button></section>`+rows.map(p=>{const ms=p.entities.map(e=>metrics(e,parts(e)));return `<article class="manager-row"><div><strong>${esc(p.name)}</strong><p>${p.entities.length} gian hàng · ${ms.filter(m=>m.remainder>0n).length} cần lập · ${ms.filter(m=>m.due).length} đến / quá ngày thu</p><p>Còn phải thu tham chiếu · ${displayCents(ms.reduce((s,m)=>s+m.reference,0n))}</p><p>Đã lập trong phiên · ${displayCents(ms.reduce((s,m)=>s+m.planned,0n))} · Còn cần lập ${displayCents(ms.reduce((s,m)=>s+m.remainder,0n))}</p></div><button data-drill="${esc(p.id)}">Xem danh sách →</button></article>`;}).join('');
 }
+$('#cbldList').addEventListener('click',e=>{const b=e.target.closest('[data-cbld]');if(b)selectCbld(b.dataset.cbld);});
+$('#staffList').addEventListener('click',e=>{const b=e.target.closest('[data-person]');if(b)selectCskh(b.dataset.person);});
+$('#changeCbld').onclick=resetEntry;
+$('#confirmChangeCbld').onclick=resetEntry;
+$('#changeCskh').onclick=()=>{state.persona=null;$('#entryConfirm').hidden=true;$('#cskhStep').hidden=false;$('#cskhTitle').focus();};
+$('#enterWorkspace').onclick=enter;
+$('#changeStaff').onclick=()=>{$('#workspace').hidden=true;$('#entry').hidden=false;$('#toast').hidden=true;resetEntry();window.scrollTo(0,0);$('#cbldTitle').setAttribute('tabindex','-1');$('#cbldTitle').focus();};
+$('.main-nav').onclick=e=>{const b=e.target.closest('[data-view]');if(b){state.staffFilter=null;changeView(b.dataset.view);}};
+$('#queueFilter').onchange=e=>changeView(e.target.value);
+$('#type').onchange=e=>{state.type=e.target.value;render();};
+$('#search').oninput=e=>{state.query=e.target.value;render();};
+$('#queue').onclick=e=>{const b=e.target.closest('[data-plan]');if(b)openPlan(b.dataset.plan);if(e.target.closest('[data-reset]')){state.type='ALL';state.query='';state.staffFilter=null;$('#type').value='ALL';$('#search').value='';changeView('work');}};
+$('#info').onclick=information;
+$('#information').onclick=e=>{if(e.target.closest('[data-close]'))$('#information').close();if(e.target.closest('#openManager')){$('#information').close();state.manager=true;render();window.scrollTo(0,0);}const demo=e.target.closest('[data-demo]');if(demo){$('#information').close();$('#queue').innerHTML=`<div class="empty" role="status"><h3>${demo.dataset.demo==='loading'?'Đang tải danh sách…':'Chưa tải được danh sách'}</h3><p>Trạng thái minh họa để duyệt giao diện.</p><button data-reset>Trở lại công việc</button></div>`;}};
+$('#manager').onclick=e=>{const d=e.target.closest('[data-drill]');if(d){state.staffFilter=d.dataset.drill;state.type='ALL';state.query='';$('#type').value='ALL';$('#search').value='';changeView('all');}if(e.target.closest('[data-back-work]')){state.staffFilter=null;changeView('work');}};
+$('#closePlan').onclick=requestClose;$('#planner').addEventListener('cancel',e=>{e.preventDefault();requestClose();});
+$('#keepEditing').onclick=()=>{$('#discard').hidden=true;};$('#discardChanges').onclick=()=>{state.dirty=false;$('#planner').close();};
+$('#addPart').onclick=()=>{addPart();state.dirty=true;preview();$('#installments').lastElementChild.querySelector('input').focus();};
+  $('#installments').addEventListener('input',e=>{state.dirty=true;if(e.target.name==='amount')formatInput(e.target);if(e.target.name==='date'){const row=e.target.closest('.installment');row.querySelector('.date-display').textContent=e.target.value?dateLabel(e.target.value):'DD/MM/YYYY';row.querySelector('.date-preview').textContent=e.target.value?'':'Chưa chọn ngày';}$('#formError').textContent='';e.target.removeAttribute('aria-invalid');preview();});
+$('#installments').addEventListener('paste',e=>{if(e.target.name!=='amount')return;const pasted=e.clipboardData.getData('text');if(parseInput(pasted)===null){e.preventDefault();$('#formError').textContent='Chỉ dán số tiền nguyên VND; dấu chấm chỉ dùng phân nhóm hàng nghìn.';e.target.setAttribute('aria-invalid','true');}});
+$('#installments').onclick=e=>{const b=e.target.closest('[data-days]');if(b){const row=b.closest('.installment');const date=addDays(today(),Number(b.dataset.days));row.querySelector('[name=date]').value=date;row.querySelector('.date-display').textContent=dateLabel(date);row.querySelector('.date-preview').textContent='';state.dirty=true;}};
+$('#planForm').onsubmit=save;
+$('#undo').onclick=()=>{if(!state.undo)return;state.plans.set(state.undo.key,state.undo.previous);state.undo=null;$('#toastText').textContent='Đã hoàn tác lần lưu gần nhất.';$('#toast').hidden=true;render();};
+function connection(){ $('#connection').hidden=navigator.onLine; }
+window.addEventListener('online',connection);window.addEventListener('offline',connection);connection();
+$('#planner').addEventListener('close',()=>{requestAnimationFrame(()=>{if(!$('#planner').open)window.scrollTo(0,state.queueScroll);});});
+$('#installments').addEventListener('beforeinput',e=>{if(e.target.name==='amount' && e.inputType==='insertText' && e.data && /\D/.test(e.data)){e.preventDefault();$('#formError').textContent='Nhập chữ số nguyên VND. Dấu phân nhóm được thêm tự động.';}});
+await load();
 
-function renderLanding() {
-  const cbld = document.getElementById('cbldSelect');
-  const staff = document.getElementById('staffSelect');
-  if (!cbld || !staff) return;
-  cbld.innerHTML = cbldOptions().map(name => `<option value="${esc(name)}">${esc(name)}</option>`).join('');
-  cbld.value = selectedCbldId;
-  const options = visibleStaffOptions();
-  if (!options.some(s => s.id === selectedStaffId)) selectedStaffId = options[0]?.id || '';
-  staff.innerHTML = options.map(s => `<option value="${esc(s.id)}">${esc(s.name)} (${s.shopCount} Shop)</option>`).join('');
-  staff.value = selectedStaffId;
-  const owned = shops.filter(s => ownerKey(s) === selectedStaffId);
-  const debt = owned.reduce((sum, s) => sum + Math.max(0, Number(s.official_outstanding) || 0), 0);
-  const noPlan = owned.filter(s => !currentPlan(shopEvents(s))).length;
-  document.getElementById('landingSummary').innerHTML = `<div><b>${owned.length}</b><small>Shop</small></div><div><b>${fmtCompact(debt)}</b><small>Tổng nợ còn phải thu</small></div><div><b>${noPlan}</b><small>Chưa kế hoạch</small></div>`;
-}
-
-function matchesFilter(shop) {
-  const debt = Math.max(0, Number(shop.official_outstanding) || 0);
-  const events = shopEvents(shop), planValue = currentPlan(events);
-  const date = planValue?.expected_date || planValue?.date || '';
-  if (filter === 'debt') return debt > 0;
-  if (filter === 'noplan') return !planValue;
-  if (filter === 'today') return date === localDate();
-  if (filter === 'overdue') return Boolean(date && date < localDate());
-  if (filter === 'signal') return Boolean(latestOf(events, ['PAYMENT_REPORTED']));
-  return true;
-}
-
-function renderWorkspace() {
-  renderLanding();
-  const workspace = document.getElementById('workspace'), landing = document.getElementById('landing');
-  if (workspace) workspace.hidden = !workspaceEntered;
-  if (landing) landing.hidden = workspaceEntered;
-  if (!workspaceEntered) return;
-  const list = document.getElementById('list');
-  if (!list) return;
-  const visible = selectedShops();
-  const debtTotal = visible.reduce((sum, shop) => sum + (Number(shop.official_outstanding) || 0), 0);
-  const noPlan = visible.filter(shop => !currentPlan(shopEvents(shop))).length;
-  const signalCount = visible.filter(shop => latestOf(shopEvents(shop), ['PAYMENT_REPORTED'])).length;
-  const overdue = visible.filter(shop => { const p = currentPlan(shopEvents(shop)); const date = p?.expected_date || p?.date; return date && date < localDate(); }).length;
-  document.getElementById('workspaceMeta').textContent = `${esc(selectedStaffId ? (staffOptions.find(s => s.id === selectedStaffId)?.name || '') : '')} · ${esc(selectedCbldId)}`;
-  document.getElementById('workspaceSummary').textContent = `${visible.length} Shop · Tổng nợ còn phải thu ${fmtCompact(debtTotal)} · Chưa kế hoạch ${noPlan} · Có tín hiệu ${signalCount} · Quá hạn ${overdue}`;
-  const shopSelect = document.getElementById('shopSelect');
-  if (shopSelect) shopSelect.innerHTML = '<option value="">Chọn Shop</option>' + visible.map(s => `<option value="${esc(s.shop_id)}">${esc(s.shop_id)} — ${esc(s.cskh_name)}</option>`).join('');
-  list.innerHTML = '';
-  visible.forEach(shop => {
-    const events = shopEvents(shop), planValue = currentPlan(events), signalValue = latestOf(events, ['PAYMENT_REPORTED']);
-    const metrics = planMetrics(shop, planValue), card = document.createElement('div');
-    card.className = 'card';
-    card.innerHTML = `<b>${esc(shop.shop_id)}</b><div class="muted">${esc(shop.cskh_name)} · ${esc(shop.cbld_name)}</div><p>Tổng nợ còn phải thu: <b>${fmtCompact(shop.official_outstanding)}</b></p><p class="muted">Nợ PS còn lại: ${fmtCompact(shop.ps_outstanding)}</p><p>Kế hoạch hiện tại: <b>${fmtCompact(metrics.amount)}</b><br>Còn chưa có kế hoạch: <b>${fmtCompact(metrics.unplanned)}</b><br>Tỷ lệ phủ kế hoạch: <b>${metrics.coverage == null ? '—' : `${(metrics.coverage * 100).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%`}</b></p><span class="badge">${planValue ? 'Có kế hoạch' : 'Chưa có kế hoạch'}</span>${signalValue ? '<span class="badge">Có tín hiệu</span>' : ''}<button type="button">Mở Shop</button>`;
-    card.querySelector('button').addEventListener('click', () => openShop(shop.shop_id));
-    list.appendChild(card);
-  });
-}
-
-function renderCurrentPlanPanel(planValue = currentPlan(currentEvents)) {
-  const node = document.getElementById('currentPlanPanel');
-  if (!node) return;
-  node.hidden = false;
-  const metrics = planMetrics(current || { official_outstanding: 0 }, planValue);
-  const ratio = metrics.coverage == null ? '—' : `${(metrics.coverage * 100).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%`;
-  if (!planValue) {
-    node.innerHTML = `<b>Kế hoạch hiện tại</b><p class="muted">Chưa có kế hoạch hiện tại.</p><p>Còn chưa có kế hoạch: <b>${fmtVnd(metrics.unplanned)}</b></p><p>Tỷ lệ phủ kế hoạch: <b>${ratio}</b></p>`;
-    return;
-  }
-  const savedAt = planValue.event_time || planValue.at;
-  node.innerHTML = `<b>Kế hoạch hiện tại</b><p class="current-plan-amount">${esc(fmtVnd(metrics.amount))}</p>${planValue.expected_date || planValue.date ? `<p>Dự kiến thu: <b>${esc(formatDateVi(planValue.expected_date || planValue.date))}</b></p>` : ''}<p>Còn chưa có kế hoạch: <b>${fmtVnd(metrics.unplanned)}</b></p><p>Tỷ lệ phủ kế hoạch: <b>${ratio}</b></p><p class="muted">✓ Đã lưu${savedAt ? ` · ${esc(new Date(savedAt).toLocaleString('vi-VN'))}` : ''}</p>`;
-}
-
-async function openShop(id) {
-  current = shops.find(shop => shop.shop_id === id && ownerKey(shop) === selectedStaffId);
-  if (!current) return;
-  try { currentEvents = await eventsFor(current); }
-  catch (error) { return setMessage(`Không đọc được lịch sử: ${error.message}`, true); }
-  const planValue = currentPlan(currentEvents);
-  document.getElementById('title').textContent = current.shop_id;
-  document.getElementById('debt').innerHTML = `Shop: <b>${esc(current.shop_id)}</b><br>CSKH phụ trách: <b>${esc(current.cskh_name)}</b><br>CBLĐ: <b>${esc(current.cbld_name)}</b><br>Tổng nợ còn phải thu: <b>${fmt(current.official_outstanding)}</b><br>Nợ PS còn lại: <b>${fmt(current.ps_outstanding)}</b>`;
-  document.getElementById('pa').value = formatMoneyEditing(planValue?.amount || '');
-  document.getElementById('pd').value = planValue?.expected_date || planValue?.date || '';
-  document.getElementById('pn').value = planValue?.note || '';
-  setPlanSaveStatus(''); renderPlanEntryPreview(); renderCurrentPlanPanel(planValue); history();
-  document.getElementById('shop').showModal();
-}
-
-window.STAFF_APP_READ_CONTRACT = 'GOVERNED_CURRENT_POINTER_V1';
 

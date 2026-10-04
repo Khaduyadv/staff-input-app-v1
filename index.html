@@ -1,60 +1,45 @@
 <!doctype html>
 <html lang="vi">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#172033">
-  <meta name="description" content="Quản trị thu nợ — nhập kế hoạch và tín hiệu thanh toán theo phân công.">
-  <title>Quản trị thu nợ</title>
-  <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="app.css?v=governed-current-v1">
-</head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content"><meta name="theme-color" content="#193e37"><title>Kế hoạch thu · V2.3</title><link rel="stylesheet" href="styles.css?v=20261004-v23-final-r1"></head>
 <body>
-<header><b class="brand">QUẢN TRỊ THU NỢ</b><button class="info-button" type="button" onclick="info.showModal()" aria-label="Thông tin ứng dụng">ⓘ</button></header>
-<main>
-  <div id="bootMessage" class="message">Đang khởi tạo…</div>
-  <section id="login" hidden>
-    <h1>Không thể mở ứng dụng</h1><p>Hãy tải lại ứng dụng hoặc liên hệ quản trị.</p>
-    <input id="email" type="email" placeholder="email@domain.com" autocomplete="email">
-    <button type="button" onclick="go()">Gửi mã/link đăng nhập</button>
-    <div id="loginMessage" class="message" aria-live="polite"></div>
-  </section>
-  <section id="app" hidden>
-    <section id="landing" class="landing">
-      <h1>Nhập liệu</h1>
-      <p class="muted">Chọn đúng CBLĐ và nhân viên phụ trách để mở danh sách Shop.</p>
-      <label for="cbldSelect">CBLĐ</label><select id="cbldSelect"></select>
-      <label for="staffSelect">Nhân viên phụ trách</label><select id="staffSelect"></select>
-      <div id="landingSummary" class="summary-grid"></div>
-      <button id="enterWorkspace" type="button" class="primary-action">NHẬP LIỆU</button>
-    </section>
-    <section id="workspace" hidden>
-      <div class="app-head"><div><h1 id="workspaceTitle">SHOP CỦA TÔI</h1><div id="workspaceMeta" class="muted"></div></div><button type="button" class="secondary" onclick="changeStaff()">← Đổi nhân viên</button></div>
-      <div id="message" class="message" aria-live="polite"></div>
-      <div id="workspaceSummary" class="muted"></div>
-      <div class="filters" aria-label="Bộ lọc công việc">
-        <button type="button" data-filter="all">Tất cả</button><button type="button" data-filter="debt">Còn phải thu</button><button type="button" data-filter="noplan">Chưa có kế hoạch</button><button type="button" data-filter="today">Kế hoạch hôm nay</button><button type="button" data-filter="overdue">Quá hạn</button><button type="button" data-filter="signal">Có tín hiệu</button>
-      </div>
-      <label for="shopSearch">Tìm Shop</label><input id="shopSearch" placeholder="Nhập mã Shop" autocomplete="off">
-      <select id="shopSelect"><option value="">Chọn Shop</option></select>
-      <div id="list"></div>
-      <button id="adminAccessButton" type="button" class="secondary" onclick="loadAdminAccessList()" hidden>Danh sách nhân sự</button>
-    </section>
-  </section>
-</main>
-<dialog id="shop"><button class="x" type="button" onclick="closeShop()">×</button><h2 id="title"></h2><div id="debt"></div>
-  <h3>KẾ HOẠCH THU</h3>
-  <div class="money-input-wrap"><input id="pa" type="text" inputmode="numeric" autocomplete="off" placeholder="Số tiền"><span class="money-unit">VNĐ</span></div>
-  <input id="pd" type="date"><textarea id="pn" placeholder="Ghi chú"></textarea>
-  <div id="planEntryPreview" class="plan-preview" aria-live="polite"></div>
-  <button id="savePlanButton" type="button" class="primary-action" onclick="plan()">Lưu kế hoạch</button>
-  <div id="planSaveStatus" class="message save-status" aria-live="polite"></div>
-  <div id="currentPlanPanel" class="current-plan-panel" aria-live="polite"></div>
-  <button type="button" class="danger" onclick="cancelPlan()">Hủy kế hoạch</button>
-  <h3>TÍN HIỆU THANH TOÁN</h3><select id="st"><option>Khách báo đã chuyển</option><option>Có UNC/chứng từ</option><option>Xác nhận khác</option></select><div class="money-input-wrap"><input id="sa" type="text" inputmode="numeric" autocomplete="off" placeholder="Số tiền"><span class="money-unit">VNĐ</span></div><input id="sd" type="date"><input id="unc" type="file" accept="image/*,.pdf"><textarea id="sn" placeholder="Ghi chú"></textarea><button id="saveSignalButton" type="button" class="primary-action" onclick="signal()">Lưu tín hiệu</button><div id="signalSaveStatus" class="message save-status" aria-live="polite"></div><h3>LỊCH SỬ</h3><div id="hist"></div>
-</dialog>
-<dialog id="adminDialog"><button class="x" type="button" onclick="closeAdmin()">×</button><h2>Danh sách nhân sự</h2><p class="muted">Phân công và Chủ Shop lấy từ Assignment; người nhập hộ không đổi Chủ Shop.</p><div class="table-wrap"><table><thead><tr><th>Tên</th><th>Vai trò</th><th>Email</th><th>Số Shop</th><th>Trạng thái</th></tr></thead><tbody id="adminList"></tbody></table></div></dialog>
-<dialog id="info"><button class="x" type="button" onclick="closeInfo()">×</button><h2>Thông tin ứng dụng</h2><p><b>Trạng thái:</b> Real data workspace · chỉ đọc công nợ</p><p><b>Project:</b> OCEAN_CITY</p><p><b>Phiên bản:</b> Governed Current V1</p><p><b>Nguồn công nợ:</b> staff_manifest_v1 + staff_current_v1</p><p><b>Nguyên tắc:</b> Tổng nợ còn phải thu lấy từ official_outstanding; Nợ PS còn lại là chỉ tiêu phụ. Tín hiệu = sự kiện nhân viên; kế hoạch = dự kiến. Có UNC không đồng nghĩa đã thu.</p><details><summary>Thông tin kiểm soát</summary><p>Phạm vi dữ liệu khóa server-side theo OCEAN_CITY. Sự kiện append-only. UNC lưu private. Attribution lấy từ Assignment. Nếu governed current pointer chưa sẵn sàng, ứng dụng dừng đọc và không dùng MAX(as_of) thay thế.</p><p>Người nhập trong Shared Workspace hiện chưa được xác thực danh tính.</p></details></dialog>
-<script src="supabase.min.js"></script><script src="config.js"></script><script src="app.js?v=governed-current-v1"></script>
+<a class="skip" href="#queue">Đến danh sách công việc</a>
+<section id="entry" class="entry">
+ <div class="entry-brand">
+  <!-- Logo seam: when the official asset is supplied, place it in assets/ and unhide ownerLogo. -->
+  <img id="ownerLogo" class="owner-logo" hidden alt="Mega Grand World Hanoi">
+  <span>MEGA GRAND WORLD HANOI<br><b>THU CÔNG NỢ</b></span>
+ </div>
+ <div class="entry-box"><small class="sandbox-badge">BẢN TRẢI NGHIỆM · V2.3</small><h1>Bắt đầu công việc</h1><p class="entry-intro">Chọn phạm vi phụ trách theo hai bước.</p>
+  <section class="entry-step" id="cbldStep" aria-labelledby="cbldTitle"><div class="step-title"><span>1</span><div><small>BƯỚC 1</small><h2 id="cbldTitle">CBLĐ phụ trách</h2></div></div><div id="cbldList" class="staff-list" aria-label="Danh sách CBLĐ"></div></section>
+  <section class="entry-step" id="cskhStep" aria-labelledby="cskhTitle" hidden><div class="step-title"><span>2</span><div><small>BƯỚC 2</small><h2 id="cskhTitle">Chọn CSKH</h2></div></div><p id="selectedCbldText" class="selected-context"></p><button id="changeCbld" class="inline-change" type="button">Đổi CBLĐ</button><div id="staffList" class="staff-list" aria-label="Danh sách CSKH"></div></section>
+  <section class="entry-confirm" id="entryConfirm" aria-labelledby="confirmTitle" hidden><small>BƯỚC 3 · XÁC NHẬN</small><h2 id="confirmTitle">Thông tin công việc</h2><dl><div><dt>CBLĐ</dt><dd id="confirmCbld"></dd></div><div><dt>CSKH</dt><dd id="confirmCskh"></dd></div><div><dt>Phạm vi</dt><dd id="confirmCount"></dd></div></dl><div class="confirm-actions"><button id="confirmChangeCbld" type="button">Đổi CBLĐ</button><button id="changeCskh" type="button">Đổi CSKH</button><button id="enterWorkspace" class="primary" type="button">Bắt đầu công việc →</button></div></section>
+  <p id="governedNotice" class="muted entry-note">Chọn đúng phạm vi để bắt đầu công việc.</p>
+  <p id="entryError" class="form-error" role="alert" aria-live="polite"></p>
+ </div>
+</section>
+<div id="workspace" hidden>
+ <header class="app-header"><div class="wordmark"><b>Thu công nợ</b><span class="sandbox-badge">Bản trải nghiệm · V2.3</span></div><button id="changeStaff">Đổi cán bộ</button></header>
+ <nav class="main-nav" aria-label="Điều hướng chính"><div class="nav-brand">CÔNG VIỆC<br><strong>Thu đúng hẹn.</strong></div><button data-view="work"><span aria-hidden="true">☰</span> Công việc</button><button data-view="due"><span aria-hidden="true">◷</span> Lịch thu</button><button data-view="all"><span aria-hidden="true">▤</span> Danh mục</button><p class="nav-foot">OCEAN CITY<br>V2.3 · Bản thử nghiệm</p></nav>
+ <main id="main">
+  <div id="connection" role="status" hidden>Mất kết nối. Kế hoạch trong phiên vẫn có thể nhập; chưa gửi đi và sẽ mất khi tải lại.</div>
+  <section class="work-head"><div><small id="scopeLabel">CSKH</small><h1 id="personName"></h1><p><b>CBLĐ:</b> <span id="workspaceCbld"></span> · <span id="scopeCount"></span></p></div><button id="info" class="text-button">ⓘ Về số tiền</button></section>
+  <p class="reference-note">Cập nhật đến <span id="asOf"></span></p>
+  <div class="work-title"><div><small>VIỆC CẦN LÀM</small><h2 id="workTitle"></h2></div><span id="actionCount" class="count-pill"></span></div>
+  <div class="toolbar"><label class="search-label"><span class="sr-only">Tìm mã gian hàng</span><input id="search" type="search" placeholder="Tìm mã gian hàng" autocomplete="off"></label><label><span class="sr-only">Nhóm gian hàng</span><select id="type"><option value="ALL">Tất cả loại</option><option>SHOP</option><option>KHÁC</option></select></label><label class="queue-filter"><span class="sr-only">Danh sách công việc</span><select id="queueFilter"><option value="work">Cần xử lý</option><option value="needs">Chưa có kế hoạch</option><option value="partial">Chưa lập đủ</option><option value="due">Đến / quá ngày thu</option><option value="covered">Đã lập đủ</option><option value="all">Tất cả gian hàng</option></select></label></div>
+  <div class="list-caption"><span id="resultCount" role="status"></span><span>Ưu tiên ngày thu, rồi số còn cần lập</span></div>
+  <div id="manager" hidden></div><div id="queue" tabindex="-1"></div>
+  <footer>V2.3 · 20261004-v23-final-r1 <span>Kế hoạch thu không phải tiền đã thu.</span></footer>
+ </main>
+</div>
+<dialog id="planner" aria-labelledby="planTitle"><form id="planForm" novalidate>
+ <header class="sheet-head"><button type="button" id="closePlan" aria-label="Đóng kế hoạch">←</button><div><small>KẾ HOẠCH THU</small><h2 id="planTitle" tabindex="-1"></h2></div><span id="planType" class="badge"></span></header>
+ <div class="sheet-body"><p id="planStaff" class="muted"></p><section class="plan-context"><small>CÒN PHẢI THU</small><strong id="planReference"></strong><span class="debt-disclosure">ⓘ Theo số liệu đang dùng trong bản trải nghiệm</span><div><span>Đã lưu kế hoạch trong phiên</span><b id="priorPlan"></b></div><div><span>Còn cần lập trước lần này</span><b id="priorRemaining"></b></div></section><p id="existingNote" class="muted"></p><div id="installments"></div><button id="addPart" type="button" class="add-part">＋ Thêm đợt thu</button><div class="preview" aria-live="polite"><span>Sau kế hoạch này, còn cần lập</span><b id="previewRemaining"></b><small id="excessNote"></small></div><p id="formError" role="alert" tabindex="-1"></p><div id="discard" hidden><p>Thay đổi chưa được lưu.</p><button type="button" id="keepEditing">Tiếp tục nhập</button><button type="button" id="discardChanges">Bỏ thay đổi</button></div></div>
+ <div class="sheet-actions"><p id="planFeedback" role="status" aria-live="polite"></p><div><button type="submit" name="intent" value="save">Lưu kế hoạch</button><button type="submit" name="intent" value="next" class="primary">Lưu & tiếp theo →</button></div></div>
+</form></dialog>
+<dialog id="information" aria-labelledby="infoTitle"><div class="dialog-head"><h2 id="infoTitle">Thông tin số liệu</h2><button data-close="information" aria-label="Đóng thông tin">×</button></div><div id="infoBody"></div></dialog>
+<div id="toast" class="toast" role="status" hidden><span id="toastText"></span><button id="undo">Hoàn tác</button></div>
+<noscript>Cần bật JavaScript để mở danh sách. Không thể thay bằng dữ liệu mô phỏng.</noscript>
+<script src="governed-runtime-config.js?v=20261004-governed-r1"></script>
+<script type="module" src="app.js?v=20261004-governed-r1"></script>
 </body></html>
+
