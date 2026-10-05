@@ -1,7 +1,6 @@
 const CONTRACT_VERSION = 'STAFF_INPUT_MODEL_B_SCOPE_V1_1';
 const DEFAULT_PROJECT_ID = 'OCEAN_CITY';
 const DEFAULT_BASE_URL = 'https://aniuuzfacpvpgiotikik.supabase.co';
-const DEFAULT_CATALOG = './scoped-context-catalog.json';
 const CURRENT_FIELDS = ['project_id','shop_id','owner_staff_id','cskh_name','cbld_name','as_of','ps_kpi','ps_collected','ps_outstanding','official_kpi','official_collected','official_outstanding','source_hash'];
 const EVENT_FIELDS = ['project_id','event_id','shop_id','event_type','event_time','actor_verification'];
 
@@ -16,7 +15,6 @@ const configFromWindow = () => ({
   cutoffAt: window.__STAFF_INPUT_GOVERNED_CONFIG__?.cutoffAt || new Date().toISOString(),
   pageSize: Math.min(1000, Math.max(1, Number(window.__STAFF_INPUT_GOVERNED_CONFIG__?.pageSize || 250))),
   eventPageSize: Math.min(1000, Math.max(1, Number(window.__STAFF_INPUT_GOVERNED_CONFIG__?.eventPageSize || 1000))),
-  contextCatalogPath: window.__STAFF_INPUT_GOVERNED_CONFIG__?.contextCatalogPath || DEFAULT_CATALOG,
   writeEnabled: window.__STAFF_INPUT_GOVERNED_CONFIG__?.writeEnabled === true
 });
 
@@ -113,11 +111,19 @@ export function createGovernedAdapter({ fetchImpl = fetch, config = configFromWi
   };
   return {
     async loadContextCatalog() {
-      const response = await fetchImpl(config.contextCatalogPath, {cache:'no-store'});
-      const data = await readJson(response, 'CONTEXT_CATALOG_UNAVAILABLE');
-      if (data?.contract_version !== CONTRACT_VERSION || data?.mode !== 'PRESENTATION_CHOICES_ONLY' || !Array.isArray(data.entities) || !data.entities.length) throw new GovernedReadError('CONTRACT_CONFLICT','CONTEXT_CATALOG_INVALID');
-      data.entities.forEach(validateContext);
-      return data.entities;
+      const data = await rpc('staff_context_catalog_v1_1', {p_project_id:config.projectId});
+      if (!Array.isArray(data) || !data.length) throw new GovernedReadError('CONTRACT_CONFLICT','CONTEXT_CATALOG_INVALID');
+      return data.map((row, index) => {
+        validateContext(row);
+        const expectedCount = Number(row.expected_count);
+        if (!Number.isInteger(expectedCount) || expectedCount < 0) throw new GovernedReadError('MALFORMED_RESPONSE', `CONTEXT_EXPECTED_COUNT_${index}`);
+        return {
+          owner_staff_id: row.owner_staff_id,
+          cskh_name: row.cskh_name,
+          cbld_name: row.cbld_name,
+          expected_count: expectedCount
+        };
+      });
     },
     async loadScoped(context) {
       validateContext(context); const [current, events] = await Promise.all([pageCurrent(context), pageEvents(context)]);

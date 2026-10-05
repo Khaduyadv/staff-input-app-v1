@@ -1,4 +1,4 @@
-import { createAdapter } from './governed-read-adapter.js?v=20261004-governed-r1';
+import { createAdapter } from './governed-read-adapter.js?v=20261005-dynamic-context-r1';
 import { buildStaffDirectory, normalizeStaffSearch } from './staff-entry-model.js?v=20261004-v23-final-r1';
 import { cents, money, displayCents, groupDigits, parseInput, formatInput, today, addDays, dateLabel, metrics, matchesQueue, compareItems, planKey, validateParts } from './workbench-model.js?v=20261004-v23-final-r1';
 const $ = s => document.querySelector(s);

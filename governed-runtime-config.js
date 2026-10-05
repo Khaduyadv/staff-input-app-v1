@@ -6,6 +6,5 @@ window.__STAFF_INPUT_GOVERNED_CONFIG__ = {
   projectId: 'OCEAN_CITY',
   pageSize: 250,
   eventPageSize: 1000,
-  contextCatalogPath: './scoped-context-catalog.json',
   writeEnabled: true
 };
