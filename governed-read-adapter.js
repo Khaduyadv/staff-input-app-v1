@@ -1,5 +1,3 @@
-import { validatePlanHistoryRows, validatePlanStateRows } from './plan-read-model.js?v=20261009-plan-read-r1';
-
 const CONTRACT_VERSION = 'STAFF_INPUT_MODEL_B_SCOPE_V1_1';
 const DEFAULT_PROJECT_ID = 'OCEAN_CITY';
 const DEFAULT_BASE_URL = 'https://aniuuzfacpvpgiotikik.supabase.co';
@@ -57,22 +55,13 @@ function validateEventRow(row, projectId, context) {
   if (row.owner_cbld_name != null && row.owner_cbld_name !== context.cbld_name) throw new GovernedReadError('SCOPE_VIOLATION', 'EVENT_CBLD_MISMATCH');
 }
 
-function mapCurrent(row, planState = null, planHistory = []) {
+function mapCurrent(row) {
   return {
     canonical_id: row.shop_id, name: row.shop_id, source_entity_type: null, presentation_type: 'CHƯA XÁC ĐỊNH',
     staff_id: row.owner_staff_id, staff: row.cskh_name, assigned_cbld: row.cbld_name,
-    owner_staff_id: row.owner_staff_id, cskh_name: row.cskh_name, cbld_name: row.cbld_name,
     source_reported_remaining: Number(row.official_outstanding), collected_amount: Number(row.official_collected),
     source_official_kpi: Number(row.official_kpi), source_official_collected: Number(row.official_collected),
     source_ps_kpi: Number(row.ps_kpi), source_ps_collected: Number(row.ps_collected), source_ps_remaining: Number(row.ps_outstanding),
-    plan_state_available: Boolean(planState),
-    official_outstanding: planState?.official_outstanding ?? null,
-    active_plan_total: planState?.active_plan_total ?? null,
-    remaining_unplanned_amount: planState?.remaining_unplanned_amount ?? null,
-    active_plan_count: planState?.active_plan_count ?? null,
-    latest_plan_at: planState?.latest_plan_at ?? null,
-    plan_coverage_status: planState?.plan_coverage_status ?? null,
-    plan_history: planHistory,
     data_as_of: row.as_of, source_hash: row.source_hash, total_obligation: null, total_remaining: null,
     old_remaining: null, current_remaining: null, cleared: null, overdue: null, plan_covered: null,
     unplanned_remaining: null, coverage_pct: null, plans: null, due: null, priority: null,
@@ -83,7 +72,6 @@ function mapCurrent(row, planState = null, planHistory = []) {
 export function createGovernedAdapter({ fetchImpl = fetch, config = configFromWindow() } = {}) {
   const base = String(config.baseUrl).replace(/\/$/, '');
   let tokenPromise;
-  let currentRowsByShop = new Map();
   const headers = () => ({ apikey: config.publishableKey, 'Content-Type': 'application/json' });
   const session = async () => {
     if (!config.publishableKey) throw new GovernedReadError('AUTH_REQUIRED', 'GOVERNED_READ_NOT_CONFIGURED');
@@ -121,39 +109,6 @@ export function createGovernedAdapter({ fetchImpl = fetch, config = configFromWi
     }
     return rows;
   };
-  const pagePlanState = async (context, shopId = null) => {
-    validateContext(context); const rows=[]; let offset=0;
-    while (true) {
-      const page = await rpc('staff_plan_state_v1_1_scoped', {p_project_id:config.projectId,p_cutoff_at:config.cutoffAt,p_selected_staff_context:context.owner_staff_id,p_selected_cbld:context.cbld_name,p_selected_cskh:context.cskh_name,p_shop_id:shopId,p_limit:config.pageSize,p_offset:offset});
-      if (!Array.isArray(page)) throw new GovernedReadError('MALFORMED_RESPONSE','PLAN_STATE_MUST_BE_ARRAY');
-      rows.push(...page); offset += page.length;
-      if (page.length < config.pageSize) break;
-      if (!page.length) throw new GovernedReadError('PAGINATION_ERROR','PLAN_STATE_PAGINATION_DID_NOT_ADVANCE');
-    }
-    return rows;
-  };
-  const pagePlanHistory = async (context, shopId, allowedShops) => {
-    validateContext(context); text(shopId,'shop_id'); const rows=[]; let offset=0;
-    while (true) {
-      const page = await rpc('staff_plan_history_v1_1_scoped', {p_project_id:config.projectId,p_cutoff_at:config.cutoffAt,p_selected_staff_context:context.owner_staff_id,p_selected_cbld:context.cbld_name,p_selected_cskh:context.cskh_name,p_shop_id:shopId,p_limit:config.pageSize,p_offset:offset});
-      if (!Array.isArray(page)) throw new GovernedReadError('MALFORMED_RESPONSE','PLAN_HISTORY_MUST_BE_ARRAY');
-      rows.push(...page); offset += page.length;
-      if (page.length < config.pageSize) break;
-      if (!page.length) throw new GovernedReadError('PAGINATION_ERROR','PLAN_HISTORY_PAGINATION_DID_NOT_ADVANCE');
-    }
-    return validatePlanHistoryRows(rows, config.projectId, shopId, allowedShops);
-  };
-  const allPlanHistory = async (context, shops) => {
-    const result = new Map(); const allowedShops = new Set(shops); let next = 0;
-    const workers = Array.from({length:Math.min(6,shops.length)}, async () => {
-      while (next < shops.length) {
-        const shopId = shops[next++];
-        result.set(shopId, await pagePlanHistory(context, shopId, allowedShops));
-      }
-    });
-    await Promise.all(workers);
-    return result;
-  };
   return {
     async loadContextCatalog() {
       const data = await rpc('staff_context_catalog_v1_1', {p_project_id:config.projectId});
@@ -172,33 +127,8 @@ export function createGovernedAdapter({ fetchImpl = fetch, config = configFromWi
     },
     async loadScoped(context) {
       validateContext(context); const [current, events] = await Promise.all([pageCurrent(context), pageEvents(context)]);
-      currentRowsByShop = new Map(current.map(row => [row.shop_id, row]));
-      let planStateByShop = null, planHistoryByShop = new Map();
-      let planStateError = null, planHistoryError = null;
-      try {
-        const planRows = await pagePlanState(context);
-        planStateByShop = validatePlanStateRows(planRows, config.projectId, context, current);
-      } catch (err) {
-        planStateError = err?.code || err?.message || 'PLAN_STATE_UNAVAILABLE';
-      }
-      if (planStateByShop) {
-        try { planHistoryByShop = await allPlanHistory(context, [...planStateByShop.keys()]); }
-        catch (err) { planHistoryError = err?.code || err?.message || 'PLAN_HISTORY_UNAVAILABLE'; planHistoryByShop = new Map(); }
-      } else {
-        planHistoryError = 'PLAN_STATE_UNAVAILABLE';
-      }
       const asOf=[...new Set(current.map(row=>row.as_of))].sort();
-      return {entities:current.map(row=>mapCurrent(row,planStateByShop?.get(row.shop_id),planHistoryByShop.get(row.shop_id)||[])), events, planHistoryByShop, meta:{mode:CONTRACT_VERSION, governed_read:true, scoped_read:true, project_id:config.projectId, cutoff_at:config.cutoffAt, debt_as_of_values:asOf, current_row_count:current.length, event_count:events.length, selected_context:{...context}, auth_model:'AUTH_ACTOR=auth.uid(); selected context is not verified identity', entity_type_contract_gap:true, debt_field_mapping:'official_outstanding → source_reported_remaining (display-only; authority unproven)', collected_field_mapping:'official_collected → collected_amount (display-only; authority unproven)', plan_state_available:Boolean(planStateByShop), plan_history_available:Boolean(planStateByShop && !planHistoryError), plan_state_error:planStateError, plan_history_error:planHistoryError, write_mode:config.writeEnabled?'LIVE_ENABLED':'SANDBOX_DRY_RUN', local_snapshot_fallback:false, v1_fallback:false}};
-    },
-    async loadPlanReadback(context, shopId) {
-      validateContext(context); text(shopId,'shop_id');
-      const current = currentRowsByShop.get(shopId);
-      if (!current || current.owner_staff_id !== context.owner_staff_id || current.cbld_name !== context.cbld_name || current.cskh_name !== context.cskh_name) throw new GovernedReadError('SCOPE_VIOLATION','PLAN_READBACK_CONTEXT_MISMATCH');
-      config.cutoffAt = new Date(Date.now() + 1000).toISOString();
-      const planRows = await pagePlanState(context, shopId);
-      const planStateByShop = validatePlanStateRows(planRows, config.projectId, context, [current]);
-      const history = await pagePlanHistory(context, shopId, new Set([shopId]));
-      return {planState:planStateByShop.get(shopId),history,cutoffAt:config.cutoffAt};
+      return {entities:current.map(mapCurrent), events, meta:{mode:CONTRACT_VERSION, governed_read:true, scoped_read:true, project_id:config.projectId, cutoff_at:config.cutoffAt, debt_as_of_values:asOf, current_row_count:current.length, event_count:events.length, selected_context:{...context}, auth_model:'AUTH_ACTOR=auth.uid(); selected context is not verified identity', entity_type_contract_gap:true, debt_field_mapping:'official_outstanding → source_reported_remaining (display-only; authority unproven)', collected_field_mapping:'official_collected → collected_amount (display-only; authority unproven)', write_mode:config.writeEnabled?'LIVE_ENABLED':'SANDBOX_DRY_RUN', local_snapshot_fallback:false, v1_fallback:false}};
     },
     async appendPlan({context, shopId, installments}) {
       validateContext(context); if (!shopId) throw new GovernedReadError('WORKSPACE_CONTEXT_REQUIRED','SHOP_ID_REQUIRED');
