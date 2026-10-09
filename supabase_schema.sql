@@ -1,0 +1,7 @@
+create extension if not exists pgcrypto;
+create table profiles(user_id uuid primary key,email text not null,role text not null check(role in ('CSKH','CBLD','ADMIN')),display_name text,active boolean default true);
+create table assignments(project_id text not null,shop_id text not null,cskh_user_id uuid,cbld_user_id uuid,cskh_name text,cbld_name text,primary key(project_id,shop_id));
+create table shop_debt_snapshot(project_id text not null,shop_id text not null,as_of timestamptz not null,ps_kpi numeric(20,2) default 0,ps_collected numeric(20,2) default 0,official_kpi numeric(20,2) default 0,official_collected numeric(20,2) default 0,source_hash text,primary key(project_id,shop_id,as_of));
+create table staff_events(event_id uuid primary key default gen_random_uuid(),project_id text not null,shop_id text not null,event_type text not null,event_time timestamptz default now(),created_by uuid not null,amount numeric(20,2),expected_date date,signal_type text,note text,supersedes_event_id uuid references staff_events(event_id),cancelled_reason text,payload jsonb default '{}'::jsonb);
+create table evidence_files(evidence_id uuid primary key default gen_random_uuid(),payment_event_id uuid not null references staff_events(event_id),project_id text not null,shop_id text not null,storage_path text not null,original_filename text not null,mime_type text,size_bytes bigint,uploaded_by uuid not null,uploaded_at timestamptz default now());
+-- Production: enable RLS. CSKH only assigned shops; CBLD group; ADMIN all. Never allow anonymous writes.

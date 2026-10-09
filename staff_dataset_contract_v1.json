@@ -1,0 +1,18 @@
+{
+  "version": "1.0-candidate",
+  "business_key": [
+    "project_id",
+    "shop_id"
+  ],
+  "principles": [
+    "Actual != Signal != Plan",
+    "No physical delete",
+    "Staff does not author Signal Eligible"
+  ],
+  "forecast_owned_fields": [
+    "payment_signal_eligible",
+    "forecast_ps_collected",
+    "forecast_ps_pct",
+    "coverage_status"
+  ]
+}
