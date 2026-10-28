@@ -88,11 +88,8 @@ export function createGovernedAdapter({ fetchImpl = fetch, config = configFromWi
   const session = async () => {
     if (!config.publishableKey) throw new GovernedReadError('AUTH_REQUIRED', 'GOVERNED_READ_NOT_CONFIGURED');
     if (typeof window.__STAFF_INPUT_AUTH_SESSION__ !== 'function') throw new GovernedReadError('AUTH_REQUIRED', 'OPERATOR_LOGIN_REQUIRED');
-    if (!tokenPromise) tokenPromise = Promise.resolve().then(() => window.__STAFF_INPUT_AUTH_SESSION__()).catch(() => {
-      tokenPromise = null;
-      throw new GovernedReadError('AUTH_REQUIRED', 'OPERATOR_SESSION_EXPIRED');
-    });
-    return tokenPromise;
+    try { return await window.__STAFF_INPUT_AUTH_SESSION__(); }
+    catch { throw new GovernedReadError('AUTH_REQUIRED', 'OPERATOR_SESSION_EXPIRED'); }
   };
   const rpc = async (name, body) => {
     const token = await session();
