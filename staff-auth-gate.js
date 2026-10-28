@@ -57,7 +57,7 @@ if (params.get('type') === 'recovery' || hash.get('type') === 'recovery') {
   try {
     if(!configOk) throw new Error('CONFIGURATION_INVALID');
     await loadSdk();
-    const client=window.supabase.createClient(BASE_URL,CONFIG.publishableKey,{auth:{flowType:'pkce',persistSession:true,autoRefreshToken:true,detectSessionInUrl:false,storage:window.sessionStorage,storageKey:AUTH_KEY}});
+    const client=window.supabase.createClient(BASE_URL,CONFIG.publishableKey,{auth:{flowType:'pkce',persistSession:true,autoRefreshToken:true,detectSessionInUrl:false,storage:window.localStorage,storageKey:AUTH_KEY}});
     if(params.has('error')||params.has('error_code')){scrubAuthUrl();message.textContent='Liên kết đăng nhập không hợp lệ hoặc đã hết hạn. Hãy yêu cầu liên kết mới.';showLogin(client);}
     else if(params.has('code')){
       const code=params.get('code'); scrubAuthUrl();
@@ -65,11 +65,11 @@ if (params.get('type') === 'recovery' || hash.get('type') === 'recovery') {
       await validateAndRun(client);
     } else {
       const {data,error}=await client.auth.getSession(); if(error) throw error;
-      if(data?.session) await validateAndRun(client); else {message.textContent='Dùng tài khoản operator đã cấp quyền để nhận liên kết đăng nhập một lần.';showLogin(client);}
+      if(data?.session) await validateAndRun(client); else {message.textContent='Dùng tài khoản operator đã cấp quyền. Phiên được giữ trên thiết bị và tự làm mới; hãy đăng xuất khi dùng chung máy.';showLogin(client);}
     }
   } catch(error) {
     message.textContent=error?.message==='OPERATOR_NOT_AUTHORIZED'?'Tài khoản chưa có quyền Staff Input. Hãy dùng tài khoản operator được cấp quyền.':'Phiên đăng nhập không hợp lệ hoặc đã hết hạn. Hãy đăng nhập lại.';
-    try { const client=window.supabase?.createClient?.(BASE_URL,CONFIG.publishableKey,{auth:{persistSession:true,storage:window.sessionStorage,storageKey:AUTH_KEY}}); await client?.auth.signOut(); } catch {}
-    if(window.supabase?.createClient) { const client=window.supabase.createClient(BASE_URL,CONFIG.publishableKey,{auth:{persistSession:true,storage:window.sessionStorage,storageKey:AUTH_KEY}}); showLogin(client); }
+    try { const client=window.supabase?.createClient?.(BASE_URL,CONFIG.publishableKey,{auth:{persistSession:true,storage:window.localStorage,storageKey:AUTH_KEY}}); await client?.auth.signOut(); } catch {}
+    if(window.supabase?.createClient) { const client=window.supabase.createClient(BASE_URL,CONFIG.publishableKey,{auth:{persistSession:true,storage:window.localStorage,storageKey:AUTH_KEY}}); showLogin(client); }
   }
 }
