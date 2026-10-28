@@ -87,12 +87,11 @@ export function createGovernedAdapter({ fetchImpl = fetch, config = configFromWi
   const headers = () => ({ apikey: config.publishableKey, 'Content-Type': 'application/json' });
   const session = async () => {
     if (!config.publishableKey) throw new GovernedReadError('AUTH_REQUIRED', 'GOVERNED_READ_NOT_CONFIGURED');
-    if (!tokenPromise) tokenPromise = (async () => {
-      let response; try { response = await fetchImpl(`${base}/auth/v1/signup`, { method:'POST', headers:headers(), body:'{}' }); } catch { throw new GovernedReadError('AUTH_REQUIRED', 'AUTH_SERVICE_UNAVAILABLE'); }
-      const auth = await readJson(response, 'AUTH_REQUIRED');
-      if (!auth?.access_token) throw new GovernedReadError('AUTH_REQUIRED', 'AUTH_TOKEN_MISSING');
-      return auth.access_token;
-    })();
+    if (typeof window.__STAFF_INPUT_AUTH_SESSION__ !== 'function') throw new GovernedReadError('AUTH_REQUIRED', 'OPERATOR_LOGIN_REQUIRED');
+    if (!tokenPromise) tokenPromise = Promise.resolve().then(() => window.__STAFF_INPUT_AUTH_SESSION__()).catch(() => {
+      tokenPromise = null;
+      throw new GovernedReadError('AUTH_REQUIRED', 'OPERATOR_SESSION_EXPIRED');
+    });
     return tokenPromise;
   };
   const rpc = async (name, body) => {
