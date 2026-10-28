@@ -42,10 +42,14 @@ function renderDebtPlanSummary(row,plans,bundle){
   const section=document.querySelector('.plan-context');
   section.hidden=false;
   section.querySelector('small').textContent='SỐ CÒN PHẢI THU & MỨC ĐỘ LẬP KẾ HOẠCH';
-  const labels=section.querySelectorAll('div span');
-  if(labels[0])labels[0].textContent='Kế hoạch ACTIVE đã ghi nhận';
-  if(labels[1])labels[1].textContent='Cần lập thêm theo tham chiếu';
-  if(labels[2])labels[2].textContent='Tỷ lệ lập kế hoạch';
+  // Bind labels to their value IDs, not to a positional NodeList. The
+  // positional selector can drift when the certified app markup changes.
+  const planLabel=$('priorPlan')?.previousElementSibling;
+  const gapLabel=$('priorRemaining')?.previousElementSibling;
+  const coverageLabel=$('activePlanCount')?.previousElementSibling;
+  if(planLabel)planLabel.textContent='Kế hoạch ACTIVE đã ghi nhận';
+  if(gapLabel)gapLabel.textContent='Cần lập thêm theo tham chiếu';
+  if(coverageLabel)coverageLabel.textContent='Tỷ lệ lập kế hoạch';
   const meta=section.querySelector('.debt-disclosure');
   const snapshot=bundle?.payload?.snapshot;
   const metrics=deriveShopKpis(row.shop_id,plans,bundle?.payload,bundle?.manifest);
