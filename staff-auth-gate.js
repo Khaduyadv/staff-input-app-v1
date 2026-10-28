@@ -2,7 +2,7 @@
 const CONFIG = window.__STAFF_INPUT_GOVERNED_CONFIG__ || {};
 const BASE_URL = 'https://aniuuzfacpvpgiotikik.supabase.co';
 const SDK_URL = './supabase.min.js?v=2.117.2';
-const NORMAL_APP = './app.js?v=20261009-plan-read-r2';
+const NORMAL_APP = './app.js?v=20261028-operator-auth-r1';
 const AUTH_KEY = 'sb-aniuuzfacpvpgiotikik-auth-token';
 
 const params = new URLSearchParams(location.search);
