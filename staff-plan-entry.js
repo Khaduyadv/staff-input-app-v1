@@ -58,7 +58,9 @@ async function save(event){
     if(!found||Number(found.amount_vnd)!==amount||found.expected_date!==date||found.status!=='ACTIVE')throw new Error('WRITE_READBACK_MISMATCH');
     localStorage.removeItem(pendingKey);$('planFeedback').textContent='Đã lưu có hiệu lực trong Staff Plan và đọc lại thành công. Dữ liệu chưa xác minh, không phải Actual hoặc Forecast được chứng nhận.';$('zeroPlanAmount').value='';$('zeroPlanDate').value='';
   }catch(error){
-    if([400,409,429].includes(error.status)&&error.message!=='IDEMPOTENCY_CONFLICT')localStorage.removeItem(pendingKey);
+    // A rate limit on a later attempt does not prove an earlier UNKNOWN write
+    // failed. Preserve the original key across 429 responses as well.
+    if([400,409].includes(error.status)&&error.message!=='IDEMPOTENCY_CONFLICT')localStorage.removeItem(pendingKey);
     $('planFeedback').textContent='';$('formError').textContent='Chưa hoàn tất: '+error.message+'. Không tự gửi lại với khóa mới khi trạng thái chưa rõ.';
   }finally{busy=false;for(const control of $('planForm').querySelectorAll('button,input'))control.disabled=false;}
 }
