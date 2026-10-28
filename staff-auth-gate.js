@@ -13,10 +13,10 @@ if (params.get('type') === 'recovery' || hash.get('type') === 'recovery') {
   const configOk = String(CONFIG.baseUrl || BASE_URL).replace(/\/$/, '') === BASE_URL && CONFIG.publishableKey;
   const root = document.createElement('main');
   root.setAttribute('aria-labelledby', 'authTitle');
-  root.style.cssText = 'box-sizing:border-box;width:min(100% - 32px,440px);margin:min(9vh,70px) auto;padding:24px;background:#fff;border-radius:12px;box-shadow:0 5px 24px #0001;color:#172b27;font:16px system-ui,sans-serif';
+  root.style.cssText = 'box-sizing:border-box;position:fixed;inset:0;z-index:99999;overflow:auto;display:flex;flex-direction:column;justify-content:flex-start;width:100%;min-height:100vh;margin:0;padding:min(9vh,70px) max(16px,calc((100vw - 440px)/2));background:#fff;color:#172b27;font:16px system-ui,sans-serif'
   const title=document.createElement('h1'); title.id='authTitle'; title.textContent='Đăng nhập Staff Input';
   const message=document.createElement('p'); message.setAttribute('role','status'); message.setAttribute('aria-live','polite');
-  root.append(title,message); document.body.replaceChildren(root);
+  root.append(title,message); document.body.append(root);
 
   const loadSdk = async () => {
     if (window.supabase?.createClient) return;
