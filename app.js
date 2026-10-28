@@ -1,4 +1,4 @@
-import { createAdapter } from './governed-read-adapter.js?v=20261009-plan-read-r2';
+import { createAdapter } from './governed-read-adapter.js?v=20261028-operator-auth-r1';
 import { buildStaffDirectory, normalizeStaffSearch } from './staff-entry-model.js?v=20261009-plan-read-r2';
 import { cents, money, displayCents, groupDigits, parseInput, formatInput, today, addDays, dateLabel, validateParts } from './workbench-model.js?v=20261009-plan-read-r2';
 import { planEventLabel, planStatusLabel } from './plan-read-model.js?v=20261009-plan-read-r2';
