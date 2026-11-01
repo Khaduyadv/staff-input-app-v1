@@ -32,6 +32,51 @@ function attachAmountInput(input){
  input.form.addEventListener('reset',()=>input.setCustomValidity(''));
 }
 attachAmountInput($('amount'));
+// SHOP_REFERENCE_HELPERS_BEGIN
+const REFERENCE_ROOT='https://khaduyadv.github.io/Dashboard-thuno/';
+const REFERENCE_SHA256='6d77ee94ffa26932f6645e313d9f43040334d044d6ffefaefad10c8a189c6202';
+const REFERENCE_SNAPSHOT_SHA256='1df85ec67a11ee920cab51cbc49afe91c0e195b0ff4b525fc3f5d92e99a65b36';
+function stableReferenceJson(v){
+ if(Array.isArray(v))return '['+v.map(stableReferenceJson).join(',')+']';
+ if(v&&typeof v==='object')return '{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+stableReferenceJson(v[k])).join(',')+'}';
+ return JSON.stringify(v);
+}
+async function referenceDigest(bytes){return [...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(x=>x.toString(16).padStart(2,'0')).join('');}
+function referenceMoney(value){
+ const m=/^(-?)(\d+)(?:\.(\d{1,6}))?$/.exec(String(value));if(!m)throw Error('REFERENCE_AMOUNT_INVALID');
+ const scaled=BigInt(m[2])*1000000n+BigInt(((m[3]||'')+'000000').slice(0,6));
+ const rounded=(scaled+500000n)/1000000n;
+ return (m[1]&&rounded?'−':'')+new Intl.NumberFormat('vi-VN').format(rounded)+' VND';
+}
+async function verifyShopReference(bytes,manifest){
+ const hash=await referenceDigest(bytes);
+ if(hash!==REFERENCE_SHA256||manifest?.files_sha256?.['shop-debt-reference.json']!==hash)throw Error('REFERENCE_FILE_SHA_MISMATCH');
+ const payload=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes)),s=payload.snapshot;
+ if(!s||payload.snapshot_sha256!==REFERENCE_SNAPSHOT_SHA256||await referenceDigest(new TextEncoder().encode(stableReferenceJson(s)))!==payload.snapshot_sha256)throw Error('REFERENCE_INNER_SHA_MISMATCH');
+ if(payload.reference_status!=='REFERENCE_AVAILABLE_REPORT_DATE_NOT_PROVEN'||s.schema!=='CONG_NO_CERTIFIED_DETAIL_SHOP_BALANCE_REFERENCE/1'||manifest.run_id!==s.source_run_id||payload.latest_actual_run_id!==s.source_run_id||manifest.actual?.certificate_sha256!==s.actual_certificate_sha256||payload.latest_actual_certificate_sha256!==s.actual_certificate_sha256||manifest.actual?.workbook_sha256!==s.actual_workbook_sha256)throw Error('REFERENCE_LINEAGE_MISMATCH');
+ if(!Array.isArray(s.rows)||s.rows.length!==587||s.shop_count!==587)throw Error('REFERENCE_POPULATION_MISMATCH');
+ const rows=new Map();for(const row of s.rows){
+  if(typeof row.shop_id!=='string'||!row.shop_id.trim())throw Error('REFERENCE_SHOP_INVALID');
+  const key=row.shop_id.trim().toLocaleUpperCase('vi');if(rows.has(key))throw Error('REFERENCE_DUPLICATE_SHOP');
+  referenceMoney(row.balance_vnd);rows.set(key,row.balance_vnd);
+ }
+ return {status:'AVAILABLE',rows,run:s.source_run_id,source:s.source.sheet+'!BI (Shop-ID: J)',date:'Ngày số dư: chưa được xác minh'};
+}
+function shopReferenceView(state,shopId){
+ const key=String(shopId||'').trim().toLocaleUpperCase('vi');
+ if(state.status==='LOADING')return {amount:'Đang tải số dư tham chiếu…',source:'Bạn vẫn có thể nhập xác nhận thanh toán.'};
+ if(state.status!=='AVAILABLE'||!state.rows.has(key))return {amount:'Chưa có số dư tham chiếu',source:state.status==='AVAILABLE'?'Shop chưa có dòng trong nguồn tham chiếu. Bạn vẫn có thể nhập xác nhận thanh toán.':'Chưa tải hoặc xác minh được nguồn tham chiếu. Bạn vẫn có thể nhập xác nhận thanh toán.'};
+ return {amount:referenceMoney(state.rows.get(key)),source:state.date+' · '+state.source+' · RUN '+state.run+' · làm tròn đến VND'};
+}
+async function loadShopReference(transport=fetch){
+ const options={cache:'no-store',signal:AbortSignal.timeout(10000)};
+ const [r,m]=await Promise.all([transport(REFERENCE_ROOT+'shop-debt-reference.json',options),transport(REFERENCE_ROOT+'COMPOSITE_DASHBOARD_RELEASE_MANIFEST.json',options)]);
+ if(!r.ok||!m.ok)throw Error('REFERENCE_UNAVAILABLE');
+ return verifyShopReference(await r.arrayBuffer(),await m.json());
+}
+// SHOP_REFERENCE_HELPERS_END
+let debtReference={status:'LOADING'};
+function renderDebtReference(){if(!shop)return;const view=shopReferenceView(debtReference,shop.shop_id);$('shopDebtReference').textContent=view.amount;$('shopDebtReferenceSource').textContent=view.source;}
 let catalog=[],lead='',staff='',shop=null,relationships=[],busy=false;
 const records=()=>JSON.parse(localStorage.getItem(STORE)||'[]');
 function text(tag,value,cls){const n=document.createElement(tag);n.textContent=value;if(cls)n.className=cls;return n;}
@@ -42,7 +87,7 @@ function context(){return 'UNAUTHENTICATED_PROXY_SELECTION:'+staff;}
 function showLeads(){lead='';staff='';$('workspace').hidden=true;$('entry').hidden=false;$('cbldStep').hidden=false;$('cskhStep').hidden=true;$('cbldList').replaceChildren();for(const l of [...new Set(catalog.map(r=>r.cbld))].sort())$('cbldList').append(button(l,()=>{lead=l;showStaff();}));}
 function showStaff(){$('cbldStep').hidden=true;$('cskhStep').hidden=false;$('selectedCbldText').textContent=lead;$('staffList').replaceChildren();for(const s of [...new Set(catalog.filter(r=>r.cbld===lead).map(r=>r.cskh))].sort())$('staffList').append(button(s,()=>{staff=s;$('entry').hidden=true;$('workspace').hidden=false;$('personName').textContent=staff;$('workspaceCbld').textContent=lead;renderShops();}));}
 function renderShops(){const scope=catalog.filter(r=>r.cbld===lead&&r.cskh===staff);const term=$('search').value.trim().toLocaleUpperCase('vi');const rows=scope.filter(r=>r.shop_id.toLocaleUpperCase('vi').includes(term));$('scopeCount').textContent=scope.length+' Shop theo Assignment hiện hành';$('resultCount').textContent=rows.length+' Shop';$('queue').replaceChildren();for(const r of rows){const c=text('article','', 'shop-card');c.append(text('h3',r.shop_id),text('p',r.cskh+' · '+r.cbld),button('Xác nhận thanh toán',()=>openShop(r)));$('queue').append(c);}}
-async function openShop(r){shop=r;$('paymentForm').reset();$('paymentShop').textContent=r.shop_id;$('responsibility').textContent='Phụ trách hiện hành: '+r.cskh+' · '+r.cbld+'; backend xác định theo ngày nghiệp vụ, không theo người thao tác.';$('formError').textContent='';$('saved').textContent='';$('relationship').replaceChildren(new Option('Chọn khách / hợp đồng',''));$('paymentDialog').showModal();try{const result=await api('relationships',{shop_id:r.shop_id});relationships=result.rows;for(const [i,x]of relationships.entries())$('relationship').append(new Option(x.customer_id+' / '+x.contract_id,i));if(relationships.length===1)$('relationship').value='0';if(!relationships.length)$('formError').textContent='Chưa có quan hệ Shop–khách–hợp đồng hợp lệ. Không tự gán khách hàng.';await refresh();}catch(e){$('formError').textContent=e.message;}finally{$('retryPending').hidden=!localStorage.getItem(PENDING);}}
+async function openShop(r){shop=r;$('paymentForm').reset();$('paymentShop').textContent=r.shop_id;$('responsibility').textContent='Phụ trách hiện hành: '+r.cskh+' · '+r.cbld+'; backend xác định theo ngày nghiệp vụ, không theo người thao tác.';$('formError').textContent='';$('saved').textContent='';$('relationship').replaceChildren(new Option('Chọn khách / hợp đồng',''));renderDebtReference();$('paymentDialog').showModal();try{const result=await api('relationships',{shop_id:r.shop_id});relationships=result.rows;for(const [i,x]of relationships.entries())$('relationship').append(new Option(x.customer_id+' / '+x.contract_id,i));if(relationships.length===1)$('relationship').value='0';if(!relationships.length)$('formError').textContent='Chưa có quan hệ Shop–khách–hợp đồng hợp lệ. Không tự gán khách hàng.';await refresh();}catch(e){$('formError').textContent=e.message;}finally{$('retryPending').hidden=!localStorage.getItem(PENDING);}}
 async function refresh(){
  if(!shop)return;const p=await api('pending',{shop_id:shop.shop_id});$('pendingTotal').textContent='Tiền khách xác nhận còn chờ SAP: '+fmt(p.amount_vnd)+' (chưa xác minh)';$('ownConfirmations').replaceChildren();
  for(const rec of records().filter(r=>r.shop_id===shop.shop_id)){
@@ -79,5 +124,7 @@ $('paymentForm').addEventListener('submit',async e=>{e.preventDefault();if(busy)
  }catch(error){$('formError').textContent=error.message+' — không tạo yêu cầu khác để thử lại.';$('retryPending').hidden=!localStorage.getItem(PENDING);}finally{busy=false;$('savePayment').disabled=false;}});
 $('retryPending').addEventListener('click',async()=>{if(busy)return;busy=true;try{await sendStored();}catch(e){$('formError').textContent=e.message;}finally{busy=false;}});
 $('search').addEventListener('input',renderShops);$('changeCbld').addEventListener('click',showLeads);$('changeStaff').addEventListener('click',showLeads);$('closePayment').addEventListener('click',()=>$('paymentDialog').close());
+loadShopReference().then(state=>{debtReference=state;renderDebtReference();}).catch(()=>{debtReference={status:'UNAVAILABLE'};renderDebtReference();});
 try{const result=await api('catalog');catalog=result.rows;if(!Array.isArray(catalog)||new Set(catalog.map(r=>r.shop_id)).size!==catalog.length)throw Error('CATALOG_KEY_ERROR');$('assignmentInfo').textContent='Phân công '+(result.assignment_effective_date||'theo nguồn đã ghim')+' · '+catalog.length+' Shop';showLeads();}catch(e){$('entryError').textContent='Chưa tải được danh mục hợp lệ: '+e.message;}
+
 

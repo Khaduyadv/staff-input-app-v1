@@ -9,7 +9,13 @@
 <p class="reference-note">Chỉ ghi nhận khi khách thông báo đã thanh toán hoặc đã nhận UNC. Đây chưa phải tiền thực nhận hay Actual.</p>
 <div class="toolbar"><input id="search" type="search" placeholder="Tìm Shop-ID" aria-label="Tìm Shop-ID"></div><p id="resultCount"></p><div id="queue"></div></main></div>
 <dialog id="paymentDialog"><form id="paymentForm"><header class="sheet-head"><button id="closePayment" type="button" aria-label="Đóng">←</button><div><small>XÁC NHẬN THANH TOÁN CHỜ SAP</small><h2 id="paymentShop"></h2></div></header>
-<div class="sheet-body"><p id="responsibility"></p><p id="pendingTotal" role="status"></p>
+<div class="sheet-body"><p id="responsibility"></p>
+<section aria-label="Công nợ tham chiếu" style="padding:12px;background:var(--soft);border-radius:8px;margin:12px 0">
+<strong>Số dư tham chiếu — ngày số dư chưa được xác minh</strong>
+<p id="shopDebtReference" role="status">Đang tải số dư tham chiếu…</p>
+<small id="shopDebtReferenceSource"></small>
+<p style="font-size:12px;margin-bottom:0">Không phải dư nợ SAP hiện hành. Chưa giảm trừ các khoản khách báo thanh toán.</p>
+</section><p id="pendingTotal" role="status"></p>
 <label>Khách hàng / hợp đồng <select id="relationship" required><option value="">Chọn khách / hợp đồng</option></select></label>
 <label>Số tiền khách xác nhận (VND) <input id="amount" type="text" required inputmode="numeric" autocomplete="off" spellcheck="false" aria-describedby="amountHelp"><small id="amountHelp">Ví dụ: 15.000.000 VND. Chỉ nhập số tiền nguyên đồng.</small></label>
 <label>Ngày khách xác nhận / ngày UNC <input id="confirmationDate" type="date" required></label>
@@ -22,4 +28,5 @@
 </div><div class="sheet-actions"><button type="submit" class="primary" id="savePayment">Lưu xác nhận</button><button type="button" id="retryPending" hidden>Đối soát / thử lại cùng mã</button></div></form></dialog>
 <footer>Staff Plan cũ: LEGACY_ARCHIVED_READ_ONLY. Không dùng kế hoạch lịch sử trong tín hiệu mới. Không OTP, không coi chọn tên là xác thực.</footer>
 <noscript>Cần bật JavaScript để nhập xác nhận.</noscript><script type="module" src="payment-entry.mjs?v=payment-v2"></script></body></html>
+
 
