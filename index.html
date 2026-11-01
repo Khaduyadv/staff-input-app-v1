@@ -1,45 +1,24 @@
-<!doctype html>
-<html lang="vi">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content"><meta name="theme-color" content="#193e37"><title>Kế hoạch thu · Staff Plan</title><link rel="stylesheet" href="styles.css?v=20261009-plan-read-r2"></head>
-<body>
-<a class="skip" href="#queue">Đến danh sách công việc</a>
-<section id="entry" class="entry">
- <div class="entry-brand">
-  <!-- Logo seam: when the official asset is supplied, place it in assets/ and unhide ownerLogo. -->
-  <img id="ownerLogo" class="owner-logo" hidden alt="Mega Grand World Hanoi">
-  <span>MEGA GRAND WORLD HANOI<br><b>THU CÔNG NỢ</b></span>
- </div>
- <div class="entry-box"><small class="sandbox-badge">V2.3</small><h1>Bắt đầu công việc</h1><p class="entry-intro">Chọn phạm vi phụ trách theo hai bước.</p>
-  <section class="entry-step" id="cbldStep" aria-labelledby="cbldTitle"><div class="step-title"><span>1</span><div><small>BƯỚC 1</small><h2 id="cbldTitle">CBLĐ phụ trách</h2></div></div><div id="cbldList" class="staff-list" aria-label="Danh sách CBLĐ"></div></section>
-  <section class="entry-step" id="cskhStep" aria-labelledby="cskhTitle" hidden><div class="step-title"><span>2</span><div><small>BƯỚC 2</small><h2 id="cskhTitle">Chọn CSKH</h2></div></div><p id="selectedCbldText" class="selected-context"></p><button id="changeCbld" class="inline-change" type="button">Đổi CBLĐ</button><div id="staffList" class="staff-list" aria-label="Danh sách CSKH"></div></section>
-  <section class="entry-confirm" id="entryConfirm" aria-labelledby="confirmTitle" hidden><small>BƯỚC 3 · XÁC NHẬN</small><h2 id="confirmTitle">Thông tin công việc</h2><dl><div><dt>CBLĐ</dt><dd id="confirmCbld"></dd></div><div><dt>CSKH</dt><dd id="confirmCskh"></dd></div><div><dt>Phạm vi</dt><dd id="confirmCount"></dd></div></dl><div class="confirm-actions"><button id="confirmChangeCbld" type="button">Đổi CBLĐ</button><button id="changeCskh" type="button">Đổi CSKH</button><button id="enterWorkspace" class="primary" type="button">Bắt đầu công việc →</button></div></section>
-  <p id="governedNotice" class="muted entry-note">Chọn đúng phạm vi để bắt đầu công việc.</p>
-  <p id="entryError" class="form-error" role="alert" aria-live="polite"></p>
- </div>
-</section>
-<div id="workspace" hidden>
- <header class="app-header"><div class="wordmark"><b>Thu công nợ</b><span class="sandbox-badge">V2.3</span></div><button id="changeStaff">Đổi cán bộ</button></header>
- <nav class="main-nav" aria-label="Điều hướng chính"><div class="nav-brand">CÔNG VIỆC<br><strong>Thu đúng hẹn.</strong></div><button data-view="work"><span aria-hidden="true">☰</span> Công việc</button><button data-view="due"><span aria-hidden="true">◷</span> Lịch thu</button><button data-view="all"><span aria-hidden="true">▤</span> Danh mục</button><p class="nav-foot">OCEAN CITY<br>V2.3</p></nav>
- <main id="main">
-  <div id="connection" role="status" hidden>Mất kết nối. Kế hoạch trong phiên vẫn có thể nhập; chưa gửi đi và sẽ mất khi tải lại.</div>
-  <section class="work-head"><div><small id="scopeLabel">CSKH</small><h1 id="personName"></h1><p><b>CBLĐ:</b> <span id="workspaceCbld"></span> · <span id="scopeCount"></span></p></div><button id="info" class="text-button">ⓘ Về số tiền</button></section>
-  <p class="reference-note">Cập nhật đến <span id="asOf"></span></p>
- <p id="planReadNotice" class="plan-read-notice" role="status" hidden></p>
-  <div class="work-title"><div><small>VIỆC CẦN LÀM</small><h2 id="workTitle"></h2></div><span id="actionCount" class="count-pill"></span></div>
-  <div class="toolbar"><label class="search-label"><span class="sr-only">Tìm mã gian hàng</span><input id="search" type="search" placeholder="Tìm mã gian hàng" autocomplete="off"></label><label><span class="sr-only">Nhóm gian hàng</span><select id="type"><option value="ALL">Tất cả loại</option><option>SHOP</option><option>KHÁC</option></select></label><label class="queue-filter"><span class="sr-only">Danh sách công việc</span><select id="queueFilter"><option value="work">Cần xử lý</option><option value="needs">Chưa có kế hoạch</option><option value="partial">Chưa lập đủ</option><option value="due">Đến / quá ngày thu</option><option value="covered">Đã lập đủ</option><option value="overplanned">Vượt kế hoạch</option><option value="all">Tất cả gian hàng</option></select></label></div>
-  <div class="list-caption"><span id="resultCount" role="status"></span><span>Ưu tiên ngày thu, rồi số còn cần lập</span></div>
-  <div id="manager" hidden></div><div id="queue" tabindex="-1"></div>
-  <footer>V2.3 · 20261009-plan-read-r2 <span>Kế hoạch thu không phải tiền đã thu.</span></footer>
- </main>
-</div>
-<dialog id="planner" aria-labelledby="planTitle"><form id="planForm" novalidate>
- <header class="sheet-head"><button type="button" id="closePlan" aria-label="Đóng kế hoạch">←</button><div><small>KẾ HOẠCH THU</small><h2 id="planTitle" tabindex="-1"></h2></div><span id="planType" class="badge"></span></header>
-<div class="sheet-body"><p id="planStaff" class="muted"></p><section class="plan-context"><small>CÒN PHẢI THU</small><strong id="planReference"></strong><span class="debt-disclosure">Theo dữ liệu kế hoạch đã lưu</span><div><span>Đã lập kế hoạch</span><b id="priorPlan"></b></div><div><span>Còn cần lập</span><b id="priorRemaining"></b></div><div><span>Số đợt đang hiệu lực</span><b id="activePlanCount"></b></div></section><p id="existingNote" class="muted"></p><section class="plan-history" aria-labelledby="planHistoryTitle"><h3 id="planHistoryTitle">LỊCH SỬ KẾ HOẠCH</h3><div id="planHistory"></div></section><div id="installments"></div><button id="addPart" type="button" class="add-part">＋ Thêm đợt thu</button><div class="preview" aria-live="polite"><span>Sau các đợt mới, còn cần lập</span><b id="previewRemaining"></b><small id="excessNote"></small></div><p id="formError" role="alert" tabindex="-1"></p><div id="readbackWarning" class="plan-read-warning" role="alert" hidden></div><button id="retryPlanReadback" type="button" hidden>Tải lại trạng thái đã lưu</button><div id="discard" hidden><p>Thay đổi chưa được lưu.</p><button type="button" id="keepEditing">Tiếp tục nhập</button><button type="button" id="discardChanges">Bỏ thay đổi</button></div></div>
- <div class="sheet-actions"><p id="planFeedback" role="status" aria-live="polite"></p><div><button type="submit" name="intent" value="save">Lưu kế hoạch</button><button type="submit" name="intent" value="next" class="primary">Lưu & tiếp theo →</button></div></div>
-</form></dialog>
-<dialog id="information" aria-labelledby="infoTitle"><div class="dialog-head"><h2 id="infoTitle">Thông tin số liệu</h2><button data-close="information" aria-label="Đóng thông tin">×</button></div><div id="infoBody"></div></dialog>
-<div id="toast" class="toast" role="status" hidden><span id="toastText"></span><button id="undo">Hoàn tác</button></div>
-<noscript>Cần bật JavaScript để mở danh sách. Không thể thay bằng dữ liệu mô phỏng.</noscript>
-<script type="module" src="staff-plan-entry.js?v=20261028-shop-balance-v2"></script>
-</body></html>
-
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#193e37"><title>Xác nhận thanh toán · Công nợ</title><link rel="stylesheet" href="styles.css?v=payment-v2"><link rel="stylesheet" href="payment-ui.css?v=payment-v2"></head><body>
+<section id="entry" class="entry"><div class="entry-brand"><span>MEGA GRAND WORLD HANOI<br><b>THU CÔNG NỢ</b></span></div>
+<div class="entry-box"><small class="sandbox-badge">XÁC NHẬN THANH TOÁN</small><h1>Bắt đầu công việc</h1><p class="entry-intro">Chọn CBLĐ → CSKH → Shop. Cho phép nhập hộ; tên được chọn không phải danh tính đã xác thực.</p>
+<section id="cbldStep" class="entry-step"><h2>CBLĐ phụ trách</h2><div id="cbldList" class="staff-list"></div></section>
+<section id="cskhStep" class="entry-step" hidden><h2>Chọn CSKH</h2><p id="selectedCbldText"></p><button id="changeCbld" type="button">Đổi CBLĐ</button><div id="staffList" class="staff-list"></div></section>
+<p id="entryError" role="alert"></p><small id="assignmentInfo"></small></div></section>
+<div id="workspace" hidden><header class="app-header"><div class="wordmark"><b>Xác nhận thanh toán</b></div><button id="changeStaff" type="button">Đổi CBLĐ / CSKH</button></header>
+<main><section class="work-head"><div><h1 id="personName"></h1><p id="workspaceCbld"></p><p id="scopeCount"></p></div></section>
+<p class="reference-note">Chỉ ghi nhận khi khách thông báo đã thanh toán hoặc đã nhận UNC. Đây chưa phải tiền thực nhận hay Actual.</p>
+<div class="toolbar"><input id="search" type="search" placeholder="Tìm Shop-ID" aria-label="Tìm Shop-ID"></div><p id="resultCount"></p><div id="queue"></div></main></div>
+<dialog id="paymentDialog"><form id="paymentForm"><header class="sheet-head"><button id="closePayment" type="button" aria-label="Đóng">←</button><div><small>XÁC NHẬN THANH TOÁN CHỜ SAP</small><h2 id="paymentShop"></h2></div></header>
+<div class="sheet-body"><p id="responsibility"></p><p id="pendingTotal" role="status"></p>
+<label>Khách hàng / hợp đồng <select id="relationship" required><option value="">Chọn khách / hợp đồng</option></select></label>
+<label>Số tiền khách xác nhận (VND) <input id="amount" type="number" min="1" max="1000000000000" step="1" required inputmode="numeric"></label>
+<label>Ngày khách xác nhận / ngày UNC <input id="confirmationDate" type="date" required></label>
+<label>Loại xác nhận <select id="confirmationType"><option value="CUSTOMER_CONFIRMED">Khách thông báo đã thanh toán</option><option value="UNC_RECEIVED">Đã nhận UNC</option></select></label>
+<label>Mã giao dịch / tham chiếu (nếu có) <input id="reference" maxlength="100" autocomplete="off"></label>
+<label>UNC / chứng từ (tùy chọn, tối đa 5 MB) <input id="evidence" type="file" accept="application/pdf,image/png,image/jpeg"></label>
+<p class="muted">Chứng từ lưu riêng có kiểm soát truy cập. Không công khai tài liệu ngân hàng. Có UNC không có nghĩa đã nhận tiền.</p>
+<label>Ghi chú tùy chọn <textarea id="note" maxlength="500"></textarea></label>
+<p id="formError" role="alert"></p><p id="saved" role="status"></p><h3>Xác nhận đã lưu từ thiết bị này</h3><div id="ownConfirmations"></div>
+</div><div class="sheet-actions"><button type="submit" class="primary" id="savePayment">Lưu xác nhận</button><button type="button" id="retryPending" hidden>Đối soát / thử lại cùng mã</button></div></form></dialog>
+<footer>Staff Plan cũ: LEGACY_ARCHIVED_READ_ONLY. Không dùng kế hoạch lịch sử trong tín hiệu mới. Không OTP, không coi chọn tên là xác thực.</footer>
+<noscript>Cần bật JavaScript để nhập xác nhận.</noscript><script type="module" src="payment-entry.mjs?v=payment-v2"></script></body></html>
