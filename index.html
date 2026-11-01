@@ -16,6 +16,12 @@
 <small id="shopDebtReferenceSource"></small>
 <p style="font-size:12px;margin-bottom:0">Không phải dư nợ SAP hiện hành. Chưa giảm trừ các khoản khách báo thanh toán.</p>
 </section><p id="pendingTotal" role="status"></p>
+<section aria-label="Số còn phải thu tạm tính" style="padding:12px;border:1px solid var(--line);border-radius:8px;margin:12px 0">
+<strong>Số còn phải thu tạm tính — không phải số dư kế toán</strong>
+<p id="provisionalBalance" role="status">Chưa kích hoạt giảm trừ tạm tính.</p>
+<small id="provisionalNote">Khoản đang nhập chưa được giảm trừ. Không thay đổi Actual.</small>
+</section>
+<p id="editStatus" role="status"></p><label id="editReasonLabel" hidden>Lý do sửa / hủy xác nhận <textarea id="editReason" maxlength="500"></textarea></label>
 <label>Khách hàng / hợp đồng <select id="relationship" required><option value="">Chọn khách / hợp đồng</option></select></label>
 <label>Số tiền khách xác nhận (VND) <input id="amount" type="text" required inputmode="numeric" autocomplete="off" spellcheck="false" aria-describedby="amountHelp"><small id="amountHelp">Ví dụ: 15.000.000 VND. Chỉ nhập số tiền nguyên đồng.</small></label>
 <label>Ngày khách xác nhận / ngày UNC <input id="confirmationDate" type="date" required></label>
@@ -28,5 +34,6 @@
 </div><div class="sheet-actions"><button type="submit" class="primary" id="savePayment">Lưu xác nhận</button><button type="button" id="retryPending" hidden>Đối soát / thử lại cùng mã</button></div></form></dialog>
 <footer>Staff Plan cũ: LEGACY_ARCHIVED_READ_ONLY. Không dùng kế hoạch lịch sử trong tín hiệu mới. Không OTP, không coi chọn tên là xác thực.</footer>
 <noscript>Cần bật JavaScript để nhập xác nhận.</noscript><script type="module" src="payment-entry.mjs?v=payment-v2"></script></body></html>
+
 
 
