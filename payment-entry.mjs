@@ -2,6 +2,36 @@
 const API='https://aniuuzfacpvpgiotikik.supabase.co/functions/v1/staff-plan-public-v1';
 const $=id=>document.getElementById(id),fmt=n=>new Intl.NumberFormat('vi-VN').format(n)+' VND';
 const STORE='cong-no:payment-confirmation-v2',PENDING=STORE+':pending';
+// AMOUNT_HELPERS_BEGIN — pure helpers also exercised by the isolated delta tests.
+function formatAmountEdit(value,start=value.length,end=start){
+ if(!/^[0-9.]*$/.test(value))return {value,start,end,invalid:true};
+ const digits=value.replace(/\./g,'');
+ const formatted=digits.replace(/\B(?=(\d{3})+(?!\d))/g,'.');
+ const position=p=>{let n=value.slice(0,p).replace(/\./g,'').length;if(!n)return 0;for(let i=0;i<formatted.length;i++)if(/\d/.test(formatted[i])&&!--n)return i+1;return formatted.length;};
+ return {value:formatted,start:position(start),end:position(end),invalid:false};
+}
+function paymentAmount(value){
+ if(!/^(?:\d+|\d{1,3}(?:\.\d{3})+)$/.test(value))throw Error('Số tiền phải là VND nguyên dương, không nhập phần thập phân.');
+ const n=Number(value.replace(/\./g,''));
+ if(!Number.isSafeInteger(n)||n<1||n>1000000000000)throw Error('Số tiền phải từ 1 đến 1.000.000.000.000 VND.');
+ return n;
+}
+function deleteAmountSeparator(value,caret,type){
+ if(type==='deleteContentBackward'&&caret>1&&value[caret-1]==='.')return {value:value.slice(0,caret-2)+value.slice(caret),caret:caret-2};
+ if(type==='deleteContentForward'&&value[caret]==='.'&&caret+1<value.length)return {value:value.slice(0,caret)+value.slice(caret+2),caret};
+ return null;
+}
+// AMOUNT_HELPERS_END
+function attachAmountInput(input){
+ let composing=false;
+ const update=()=>{if(composing)return;const f=formatAmountEdit(input.value,input.selectionStart??0,input.selectionEnd??0);if(!f.invalid){input.value=f.value;input.setSelectionRange(f.start,f.end);}try{if(input.value)paymentAmount(input.value);input.setCustomValidity(f.invalid?'Chỉ nhập chữ số VND.':'');}catch(e){input.setCustomValidity(e.message);}};
+ input.addEventListener('input',update);
+ input.addEventListener('compositionstart',()=>{composing=true;});
+ input.addEventListener('compositionend',()=>{composing=false;update();});
+ input.addEventListener('beforeinput',e=>{if(composing||input.selectionStart!==input.selectionEnd)return;const d=deleteAmountSeparator(input.value,input.selectionStart,e.inputType);if(d){e.preventDefault();input.value=d.value;input.setSelectionRange(d.caret,d.caret);update();}});
+ input.form.addEventListener('reset',()=>input.setCustomValidity(''));
+}
+attachAmountInput($('amount'));
 let catalog=[],lead='',staff='',shop=null,relationships=[],busy=false;
 const records=()=>JSON.parse(localStorage.getItem(STORE)||'[]');
 function text(tag,value,cls){const n=document.createElement(tag);n.textContent=value;if(cls)n.className=cls;return n;}
@@ -43,10 +73,11 @@ async function uploadEvidence(rec,file){
 $('paymentForm').addEventListener('submit',async e=>{e.preventDefault();if(busy)return;if(localStorage.getItem(PENDING)){$('formError').textContent='Có yêu cầu chưa rõ kết quả. Dùng Đối soát / thử lại cùng mã trước khi tạo mới.';$('retryPending').hidden=false;return;}
  if(!shop||!relationships[Number($('relationship').value)]||$('relationship').value==='')return;
  if(!$('paymentForm').reportValidity())return;const relation=relationships[Number($('relationship').value)];busy=true;$('savePayment').disabled=true;
- try{const amount=Number($('amount').value);if(!Number.isSafeInteger(amount)||amount<1)throw Error('Số tiền phải là VND nguyên dương.');const file=$('evidence').files[0];if(file&&(file.size>5242880||!['application/pdf','image/png','image/jpeg'].includes(file.type)))throw Error('UNC tối đa 5 MB, PDF/PNG/JPEG.');
+ try{const amount=paymentAmount($('amount').value);const file=$('evidence').files[0];if(file&&(file.size>5242880||!['application/pdf','image/png','image/jpeg'].includes(file.type)))throw Error('UNC tối đa 5 MB, PDF/PNG/JPEG.');
  const payload={shop_id:shop.shop_id,customer_id:relation.customer_id,contract_id:relation.contract_id,amount_vnd:amount,confirmation_date:$('confirmationDate').value,confirmation_type:$('confirmationType').value,reference:$('reference').value.trim(),note:$('note').value.trim(),operator_context:context(),capability:capability(),idempotency_key:crypto.randomUUID()};
  localStorage.setItem(PENDING,JSON.stringify({action:'submit',shop_id:shop.shop_id,payload}));const rec=await sendStored();if(file)await uploadEvidence(rec,file);
  }catch(error){$('formError').textContent=error.message+' — không tạo yêu cầu khác để thử lại.';$('retryPending').hidden=!localStorage.getItem(PENDING);}finally{busy=false;$('savePayment').disabled=false;}});
 $('retryPending').addEventListener('click',async()=>{if(busy)return;busy=true;try{await sendStored();}catch(e){$('formError').textContent=e.message;}finally{busy=false;}});
 $('search').addEventListener('input',renderShops);$('changeCbld').addEventListener('click',showLeads);$('changeStaff').addEventListener('click',showLeads);$('closePayment').addEventListener('click',()=>$('paymentDialog').close());
 try{const result=await api('catalog');catalog=result.rows;if(!Array.isArray(catalog)||new Set(catalog.map(r=>r.shop_id)).size!==catalog.length)throw Error('CATALOG_KEY_ERROR');$('assignmentInfo').textContent='Phân công '+(result.assignment_effective_date||'theo nguồn đã ghim')+' · '+catalog.length+' Shop';showLeads();}catch(e){$('entryError').textContent='Chưa tải được danh mục hợp lệ: '+e.message;}
+

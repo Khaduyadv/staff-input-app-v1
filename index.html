@@ -11,7 +11,7 @@
 <dialog id="paymentDialog"><form id="paymentForm"><header class="sheet-head"><button id="closePayment" type="button" aria-label="Đóng">←</button><div><small>XÁC NHẬN THANH TOÁN CHỜ SAP</small><h2 id="paymentShop"></h2></div></header>
 <div class="sheet-body"><p id="responsibility"></p><p id="pendingTotal" role="status"></p>
 <label>Khách hàng / hợp đồng <select id="relationship" required><option value="">Chọn khách / hợp đồng</option></select></label>
-<label>Số tiền khách xác nhận (VND) <input id="amount" type="number" min="1" max="1000000000000" step="1" required inputmode="numeric"></label>
+<label>Số tiền khách xác nhận (VND) <input id="amount" type="text" required inputmode="numeric" autocomplete="off" spellcheck="false" aria-describedby="amountHelp"><small id="amountHelp">Ví dụ: 15.000.000 VND. Chỉ nhập số tiền nguyên đồng.</small></label>
 <label>Ngày khách xác nhận / ngày UNC <input id="confirmationDate" type="date" required></label>
 <label>Loại xác nhận <select id="confirmationType"><option value="CUSTOMER_CONFIRMED">Khách thông báo đã thanh toán</option><option value="UNC_RECEIVED">Đã nhận UNC</option></select></label>
 <label>Mã giao dịch / tham chiếu (nếu có) <input id="reference" maxlength="100" autocomplete="off"></label>
@@ -22,3 +22,4 @@
 </div><div class="sheet-actions"><button type="submit" class="primary" id="savePayment">Lưu xác nhận</button><button type="button" id="retryPending" hidden>Đối soát / thử lại cùng mã</button></div></form></dialog>
 <footer>Staff Plan cũ: LEGACY_ARCHIVED_READ_ONLY. Không dùng kế hoạch lịch sử trong tín hiệu mới. Không OTP, không coi chọn tên là xác thực.</footer>
 <noscript>Cần bật JavaScript để nhập xác nhận.</noscript><script type="module" src="payment-entry.mjs?v=payment-v2"></script></body></html>
+
